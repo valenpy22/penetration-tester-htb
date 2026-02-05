@@ -1,1 +1,0 @@
-# penetration-tester-htb
