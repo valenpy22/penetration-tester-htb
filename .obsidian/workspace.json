@@ -41,12 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Getting Started/Getting Started.md",
+                "file": "Getting Started/HTB — GettingStarted Writeup.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Getting Started"
+              "title": "HTB — GettingStarted Writeup"
             }
           }
         ],
@@ -214,10 +214,11 @@
   },
   "active": "1e20549629438c48",
   "lastOpenFiles": [
-    "Penetration Testing Process/Penetration Testing Process.md",
-    "Getting Started/Pasted image 20260205130352.png",
-    "Getting Started/Pasted image 20260205130300.png",
     "Getting Started/Getting Started.md",
+    "Getting Started/HTB — GettingStarted Writeup.md",
+    "Getting Started/Pasted image 20260205130352.png",
+    "Penetration Testing Process/Penetration Testing Process.md",
+    "Getting Started/Pasted image 20260205130300.png",
     "Untitled",
     "Getting Started",
     "Penetration Testing Process"
