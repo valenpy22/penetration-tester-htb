@@ -602,3 +602,310 @@ The values for the -T flag determine the aggressiveness of our scans.
 - -T 4 / -T aggressive
 - -T 5 / -T insane
 
+# Firewall and IDS/IPS Evasion
+## Firewall
+It is a security measure against unauthorized connection attempts from external networks. Each one of these is based on a software component that monitors network traffic between the firewall and incoming data connections. 
+
+## IDS/IPS
+Intrusion Detection System and Intrusion Prevention System are also software-based components. IDS scans the network for potential attacks, analyzes them, and reports any detected attacks. IPS complements IDS by taking specific defensive measures if a potential attack should have been detected. 
+
+### Determine Firewalls and Their Rules
+For rejected packets, TCP packets are returned with an RST flag, while ICMP can contain different types of error codes.
+Such errors include:
+- Net Unreachable
+- Net Prohibited
+- Host Unreachable
+- Host Prohibited
+- Port Unreachable
+- Proto Unreachable
+
+Nmap's TCP ACK scan (-sA) method is much harder to filter for firewalls and IDS/IPS systems tha regular SYN (-sS) or Connect scans (sT) because they only send a TCP packet with only the ACK flag. When a port is closed or open, the host must respond with an RST flag. Unlike outgoing connections, all connection attempts (with the SYN flag) from external networks are usually blocked by firewalls. However, the packets with the ACK flag are often passed by the firewall because the firewall cannot determine whether the connection was first established from the external network or the internal network. 
+
+**SYN-Scan**
+```
+sudo nmap 10.129.2.28 -p 21,22,25 -sS -Pn -n --disable-arp-ping --packet-trace
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-06-21 14:56 CEST
+SENT (0.0278s) TCP 10.10.14.2:57347 > 10.129.2.28:22 S ttl=53 id=22412 iplen=44  seq=4092255222 win=1024 <mss 1460>
+SENT (0.0278s) TCP 10.10.14.2:57347 > 10.129.2.28:25 S ttl=50 id=62291 iplen=44  seq=4092255222 win=1024 <mss 1460>
+SENT (0.0278s) TCP 10.10.14.2:57347 > 10.129.2.28:21 S ttl=58 id=38696 iplen=44  seq=4092255222 win=1024 <mss 1460>
+RCVD (0.0329s) ICMP [10.129.2.28 > 10.10.14.2 Port 21 unreachable (type=3/code=3) ] IP [ttl=64 id=40884 iplen=72 ]
+RCVD (0.0341s) TCP 10.129.2.28:22 > 10.10.14.2:57347 SA ttl=64 id=0 iplen=44  seq=1153454414 win=64240 <mss 1460>
+RCVD (1.0386s) TCP 10.129.2.28:22 > 10.10.14.2:57347 SA ttl=64 id=0 iplen=44  seq=1153454414 win=64240 <mss 1460>
+SENT (1.1366s) TCP 10.10.14.2:57348 > 10.129.2.28:25 S ttl=44 id=6796 iplen=44  seq=4092320759 win=1024 <mss 1460>
+Nmap scan report for 10.129.2.28
+Host is up (0.0053s latency).
+
+PORT   STATE    SERVICE
+21/tcp filtered ftp
+22/tcp open     ssh
+25/tcp filtered smtp
+MAC Address: DE:AD:00:00:BE:EF (Intel Corporate)
+
+Nmap done: 1 IP address (1 host up) scanned in 0.07 seconds
+```
+
+**ACK-Scan**
+```
+sudo nmap 10.129.2.28 -p 21,22,25 -sA -Pn -n --disable-arp-ping --packet-trace
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-06-21 14:57 CEST
+SENT (0.0422s) TCP 10.10.14.2:49343 > 10.129.2.28:21 A ttl=49 id=12381 iplen=40  seq=0 win=1024
+SENT (0.0423s) TCP 10.10.14.2:49343 > 10.129.2.28:22 A ttl=41 id=5146 iplen=40  seq=0 win=1024
+SENT (0.0423s) TCP 10.10.14.2:49343 > 10.129.2.28:25 A ttl=49 id=5800 iplen=40  seq=0 win=1024
+RCVD (0.1252s) ICMP [10.129.2.28 > 10.10.14.2 Port 21 unreachable (type=3/code=3) ] IP [ttl=64 id=55628 iplen=68 ]
+RCVD (0.1268s) TCP 10.129.2.28:22 > 10.10.14.2:49343 R ttl=64 id=0 iplen=40  seq=1660784500 win=0
+SENT (1.3837s) TCP 10.10.14.2:49344 > 10.129.2.28:25 A ttl=59 id=21915 iplen=40  seq=0 win=1024
+Nmap scan report for 10.129.2.28
+Host is up (0.083s latency).
+
+PORT   STATE      SERVICE
+21/tcp filtered   ftp
+22/tcp unfiltered ssh
+25/tcp filtered   smtp
+MAC Address: DE:AD:00:00:BE:EF (Intel Corporate)
+
+Nmap done: 1 IP address (1 host up) scanned in 0.15 seconds
+```
+
+It changes the state of the scanned ports.
+## Detect IDS/IPS
+Unlike firewalls and their rules, the detection of IDS/IPS systems is much more difficult because these are passive traffic monitoring systems. IDS examine all connections between hosts. If the IDS finds packets containing the defined contents or specifications, the administrator is notified and takes appropriate action in the worst case.
+
+IPSs take measures configured by the administrator independently to prevent potential attacks automatically. It is essential to know that IDS and IPS are different applications and that IPS serves as a complement to IDS.
+
+Several Virtual Private Servers (VPS) with different IP addresses are recommended to determine whether such systems are on the target network during a penetration test. 
+
+One method to determine whether such IPS system is present in the target network is to scan from a single host (VPS). If at any time this host is blocked and has no access to the target network, we know that the administrator has taken some security measures. Accordingly, we can continue our penetration test with another VPS.
+
+## Decoys
+These are cases in which administrators block specific subnets from different regions in principle. Another example is when IPS should block us. For this reason, the Decoy scanning method -D is the right choice. Nmap generates various random IP addresses inserted into the IP header to disguise the origin of the packet sent. 
+
+## Scan by Using Decoys
+```
+sudo nmap 10.129.2.28 -p 80 -sS -Pn -n --disable-arp-ping --packet-trace -D RND:5
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-06-21 16:14 CEST
+SENT (0.0378s) TCP 102.52.161.59:59289 > 10.129.2.28:80 S ttl=42 id=29822 iplen=44  seq=3687542010 win=1024 <mss 1460>
+SENT (0.0378s) TCP 10.10.14.2:59289 > 10.129.2.28:80 S ttl=59 id=29822 iplen=44  seq=3687542010 win=1024 <mss 1460>
+SENT (0.0379s) TCP 210.120.38.29:59289 > 10.129.2.28:80 S ttl=37 id=29822 iplen=44  seq=3687542010 win=1024 <mss 1460>
+SENT (0.0379s) TCP 191.6.64.171:59289 > 10.129.2.28:80 S ttl=38 id=29822 iplen=44  seq=3687542010 win=1024 <mss 1460>
+SENT (0.0379s) TCP 184.178.194.209:59289 > 10.129.2.28:80 S ttl=39 id=29822 iplen=44  seq=3687542010 win=1024 <mss 1460>
+SENT (0.0379s) TCP 43.21.121.33:59289 > 10.129.2.28:80 S ttl=55 id=29822 iplen=44  seq=3687542010 win=1024 <mss 1460>
+RCVD (0.1370s) TCP 10.129.2.28:80 > 10.10.14.2:59289 SA ttl=64 id=0 iplen=44  seq=4056111701 win=64240 <mss 1460>
+Nmap scan report for 10.129.2.28
+Host is up (0.099s latency).
+
+PORT   STATE SERVICE
+80/tcp open  http
+MAC Address: DE:AD:00:00:BE:EF (Intel Corporate)
+
+Nmap done: 1 IP address (1 host up) scanned in 0.15 seconds
+```
+
+- -D RND:5 - Generates  five random IP addresses that indicates the source IP the connection comes from.
+
+**Testing Firewall Rule**
+```
+sudo nmap 10.129.2.28 -n -Pn -p445 -O
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-06-22 01:23 CEST
+Nmap scan report for 10.129.2.28
+Host is up (0.032s latency).
+
+PORT    STATE    SERVICE
+445/tcp filtered microsoft-ds
+MAC Address: DE:AD:00:00:BE:EF (Intel Corporate)
+Too many fingerprints match this host to give specific OS details
+Network Distance: 1 hop
+
+OS detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 3.14 seconds
+```
+
+**Scan by Using Different Source IP**
+```
+sudo nmap 10.129.2.28 -n -Pn -p 445 -O -S 10.129.2.200 -e tun0
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-06-22 01:16 CEST
+Nmap scan report for 10.129.2.28
+Host is up (0.010s latency).
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+MAC Address: DE:AD:00:00:BE:EF (Intel Corporate)
+Warning: OSScan results may be unreliable because we could not find at least 1 open and 1 closed port
+Aggressive OS guesses: Linux 2.6.32 (96%), Linux 3.2 - 4.9 (96%), Linux 2.6.32 - 3.10 (96%), Linux 3.4 - 3.10 (95%), Linux 3.1 (95%), Linux 3.2 (95%), AXIS 210A or 211 Network Camera (Linux 2.6.17) (94%), Synology DiskStation Manager 5.2-5644 (94%), Linux 2.6.32 - 2.6.35 (94%), Linux 2.6.32 - 3.5 (94%)
+No exact OS matches for host (test conditions non-ideal).
+Network Distance: 1 hop
+
+OS detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 4.11 seconds
+```
+
+- -S: Scans the target by using different source IP address.
+- -e tun0: Sends all requests through the specified interface.
+
+## DNS Proxying
+By default, nmap performs a reverse DNS resolution unless otherwise specified to find more important information about our target. These DNS queries are also passed in most cases because the given web server is supposed to be found and visited. The DNS queries are made over the UDP port 53. The TCP port 53 was previously only used for the so-called "one-transfers" between the DNS servers or data transfer larger than 512 bytes. 
+
+However, nmap still gives us a way to specify DNS servers ourselves (`--dns-server <ns>,<ns>`). This method could be fundamental to us if we are in a demilitarized zone (DMZ). The company's DNS servers are usually more trusted than those from the internet. We could use them to interact with the hosts of the internal network. As, another example, we can use TCP port 53 as a source port (`--source-port`) for our scans. If the administrator uses the firewall to control this port and does not filter IDS/IPS properly, our TCP packets will be trusted and passed through.
+
+**SYN-Scan of a Filtered Port**
+```
+sudo nmap 10.129.2.28 -p50000 -sS -Pn -n --disable-arp-ping --packet-trace
+
+Starting Nmap 7.80 ( https://nmap.org ) at 2020-06-21 22:50 CEST
+SENT (0.0417s) TCP 10.10.14.2:33436 > 10.129.2.28:50000 S ttl=41 id=21939 iplen=44  seq=736533153 win=1024 <mss 1460>
+SENT (1.0481s) TCP 10.10.14.2:33437 > 10.129.2.28:50000 S ttl=46 id=6446 iplen=44  seq=736598688 win=1024 <mss 1460>
+Nmap scan report for 10.129.2.28
+Host is up.
+
+PORT      STATE    SERVICE
+50000/tcp filtered ibm-db2
+
+Nmap done: 1 IP address (1 host up) scanned in 2.06 seconds
+```
+
+**SYN-Scan From DNS Port**
+```
+sudo nmap 10.129.2.28 -p50000 -sS -Pn -n --disable-arp-ping --packet-trace --source-port 53
+
+SENT (0.0482s) TCP 10.10.14.2:53 > 10.129.2.28:50000 S ttl=58 id=27470 iplen=44  seq=4003923435 win=1024 <mss 1460>
+RCVD (0.0608s) TCP 10.129.2.28:50000 > 10.10.14.2:53 SA ttl=64 id=0 iplen=44  seq=540635485 win=64240 <mss 1460>
+Nmap scan report for 10.129.2.28
+Host is up (0.013s latency).
+
+PORT      STATE SERVICE
+50000/tcp open  ibm-db2
+MAC Address: DE:AD:00:00:BE:EF (Intel Corporate)
+
+Nmap done: 1 IP address (1 host up) scanned in 0.08 seconds
+```
+
+Now that we have found out that the firewall accepts TCP port 53, it is very likely that IDS/IPS filters might also be configured much weaker than others. We can test this by trying to connect to this port by using netcat.
+```
+sudo nmap 10.129.2.28 -p50000 -sS -Pn -n --disable-arp-ping --packet-trace --source-port 53
+
+SENT (0.0482s) TCP 10.10.14.2:53 > 10.129.2.28:50000 S ttl=58 id=27470 iplen=44  seq=4003923435 win=1024 <mss 1460>
+RCVD (0.0608s) TCP 10.129.2.28:50000 > 10.10.14.2:53 SA ttl=64 id=0 iplen=44  seq=540635485 win=64240 <mss 1460>
+Nmap scan report for 10.129.2.28
+Host is up (0.013s latency).
+
+PORT      STATE SERVICE
+50000/tcp open  ibm-db2
+MAC Address: DE:AD:00:00:BE:EF (Intel Corporate)
+
+Nmap done: 1 IP address (1 host up) scanned in 0.08 seconds
+```
+
+# Firewall and IDS/IPS Evasion - Easy Lab
+# Firewall and IDS/IPS Evasion - Medium Lab
+## HTB - DNS Version Detection
+
+### Objective
+
+Find the DNS server version running on the target `10.129.23.53`.
+
+---
+
+### Step 1: Scan the port
+
+First, we confirmed that port 53 (DNS) was open using a SYN scan:
+
+bash
+
+```bash
+sudo nmap 10.129.23.53 -p53 -sS -Pn -n --disable-arp-ping --packet-trace
+```
+
+**Result:** Port 53 was open.
+
+---
+
+### Step 2: Grab the DNS version
+
+Since Nmap's automatic scan may miss information (as covered earlier), we query the DNS server directly using `dig` with a **CHAOS class TXT query**:
+
+bash
+
+````bash
+dig @10.129.23.53 version.bind CHAOS TXT
+```
+
+This works because DNS servers expose their version through a special record called `version.bind` in the CHAOS class.
+
+---
+
+### Step 3: Analyze the output
+
+Look for the answer section in the `dig` output:
+```
+;; ANSWER SECTION:
+version.bind.   0   CH  TXT  "9.x.x"
+````
+
+The version string in the `TXT` record is your answer.
+
+---
+
+### Key Takeaway
+
+Nmap's `-sV` flag alone might not retrieve DNS version info, which is why **manual banner grabbing** with `dig` is necessary — exactly the limitation discussed in the previous section.
+
+## HTB - Service Version Detection Behind a Firewall
+
+### Objective
+
+Identify the version of the service running on the target `10.129.23.56`, specifically on a port that was being filtered.
+
+---
+
+### Step 1: Full port scan with version detection
+
+We started with a full scan using source port 53 to bypass firewall rules:
+
+bash
+
+```bash
+sudo nmap 10.129.23.56 -sS -Pn -n --source-port 53 -sV --min-rate=5000
+```
+
+**Result:** Three ports found open:
+
+- `22/tcp` — OpenSSH 7.6p1 Ubuntu
+- `80/tcp` — Apache httpd 2.4.29
+- `50000/tcp` — `tcpwrapped` (version unknown)
+
+---
+
+### Step 2: Investigate port 50000
+
+Port 50000 returned `tcpwrapped`, meaning Nmap couldn't grab its banner. We tried `nc` normally and it hung — the firewall was blocking it.
+
+---
+
+### Step 3: Banner grabbing with source port 53
+
+Since the firewall only allows traffic sourced from port 53, we forced `nc` to use it:
+
+bash
+
+````bash
+sudo nc -nv -p 53 10.129.23.56 50000
+```
+
+**Result:**
+```
+220 HTB{kjnsdf2n982n1827eh76238s98di1w6}
+````
+
+---
+
+### Key Takeaway
+
+When a port shows `tcpwrapped`, it doesn't mean the service is inaccessible — it means the firewall is filtering by source. Using `--source-port 53` in Nmap and `-p 53` in `nc` mimics trusted DNS traffic, bypassing the restriction and exposing the banner.
+
+---
+
+Flag: `HTB{kjnsdf2n982n1827eh76238s98di1w6}`
