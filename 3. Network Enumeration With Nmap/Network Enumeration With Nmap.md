@@ -823,36 +823,29 @@ sudo nmap 10.129.23.53 -p53 -sS -Pn -n --disable-arp-ping --packet-trace
 
 ---
 
-### Step 2: Grab the DNS version
+### Step 2: Run a DNS-specific Nmap script
 
-Since Nmap's automatic scan may miss information (as covered earlier), we query the DNS server directly using `dig` with a **CHAOS class TXT query**:
+Since `-sV` alone wasn't enough to retrieve the DNS version, we used Nmap's NSE (Nmap Scripting Engine) with a DNS-specific script:
 
 bash
 
-````bash
-dig @10.129.23.53 version.bind CHAOS TXT
+```bash
+sudo nmap 10.129.23.53 -p53 -sV --script dns-nsid -Pn -n --disable-arp-ping
 ```
 
-This works because DNS servers expose their version through a special record called `version.bind` in the CHAOS class.
+This script queries the DNS server directly for its version information, which standard version detection misses.
 
 ---
 
 ### Step 3: Analyze the output
 
-Look for the answer section in the `dig` output:
-```
-;; ANSWER SECTION:
-version.bind.   0   CH  TXT  "9.x.x"
-````
-
-The version string in the `TXT` record is your answer.
+The script returned the flag in the field where the DNS version would normally appear in a real environment.
 
 ---
 
 ### Key Takeaway
 
-Nmap's `-sV` flag alone might not retrieve DNS version info, which is why **manual banner grabbing** with `dig` is necessary — exactly the limitation discussed in the previous section.
-
+Standard `-sV` detection has limits — for specific protocols like DNS, Nmap's NSE scripts can extract information that automatic scanning misses entirely. Knowing _which script to use_ and _when_ is what makes this lab challenging.
 ## HTB - Service Version Detection Behind a Firewall
 
 ### Objective
