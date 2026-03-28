@@ -55,12 +55,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Machines/Easy/2. Cap.md",
+                "file": "Machines/Easy/3. CCTV.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "2. Cap"
+              "title": "3. CCTV"
             }
           },
           {
@@ -244,6 +244,7 @@
   "lastOpenFiles": [
     "Machines/Easy/1. Kobold.md",
     "Machines/Easy/2. Cap.md",
+    "Machines/Easy/3. CCTV.md",
     "4. Footprinting/Footprinting.md",
     "Machines/Easy",
     "Machines",
