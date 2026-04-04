@@ -64,6 +64,20 @@
             }
           },
           {
+            "id": "d1b4f7ec43529a90",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Machines/Easy/5. TwoMillion.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "5. TwoMillion"
+            }
+          },
+          {
             "id": "ffe8277851ffaa66",
             "type": "leaf",
             "state": {
@@ -78,7 +92,7 @@
             }
           }
         ],
-        "currentTab": 3
+        "currentTab": 4
       }
     ],
     "direction": "vertical"
@@ -240,11 +254,14 @@
       "bases:Create new base": false
     }
   },
-  "active": "6a91695ed2da7bbc",
+  "active": "d1b4f7ec43529a90",
   "lastOpenFiles": [
     "Machines/Easy/1. Kobold.md",
-    "Machines/Easy/2. Cap.md",
+    "Machines/Easy/5. TwoMillion.md",
     "Machines/Easy/3. CCTV.md",
+    "2026-03-28.md",
+    "Machines/Easy/4. WingData.md",
+    "Machines/Easy/2. Cap.md",
     "4. Footprinting/Footprinting.md",
     "Machines/Easy",
     "Machines",
