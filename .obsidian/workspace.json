@@ -69,12 +69,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Machines/Easy/5. TwoMillion.md",
+                "file": "4. Footprinting/16. IPMI - Writeup.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "5. TwoMillion"
+              "title": "16. IPMI - Writeup"
             }
           },
           {
@@ -256,13 +256,29 @@
   },
   "active": "d1b4f7ec43529a90",
   "lastOpenFiles": [
-    "Machines/Easy/1. Kobold.md",
+    "4. Footprinting/Footprinting.md",
+    "4. Footprinting/16. IPMI - Writeup.md",
+    "4. Footprinting/Pasted image 20260417100959.png",
+    "4. Footprinting/15. Oracle TNS.md",
+    "4. Footprinting/14. MSSQL - Writeup.md",
+    "4. Footprinting/Summary.md",
+    "4. Footprinting/13. MySQL - Writeup.md",
+    "4. Footprinting/12. SNMP - Writeup.md",
+    "4. Footprinting/11. IMAP - POP3 Writeup.md",
+    "4. Footprinting/10. SMTP - Writeup.md",
+    "4. Footprinting/9. DNS Enumeration - Writeup.md",
+    "Screenshot from 2026-04-19 13-16-09.png",
+    "Pasted image 20260419124013.png",
+    "Pasted image 20260419123738.png",
+    "Pasted image 20260419123544.png",
+    "Pasted image 20260419122608.png",
+    "4. Footprinting/Pasted image 20260417114602.png",
     "Machines/Easy/5. TwoMillion.md",
+    "Machines/Easy/1. Kobold.md",
     "Machines/Easy/3. CCTV.md",
     "2026-03-28.md",
     "Machines/Easy/4. WingData.md",
     "Machines/Easy/2. Cap.md",
-    "4. Footprinting/Footprinting.md",
     "Machines/Easy",
     "Machines",
     "3. Network Enumeration With Nmap/Network Enumeration With Nmap.md",
