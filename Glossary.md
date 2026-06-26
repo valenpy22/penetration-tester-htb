@@ -1,0 +1,17 @@
+- CSIRT: Computer Security Incident Response Team
+- DNS: Domain Name System
+- TCP: Transmission Control Protocol
+- UDP: User Datagram Protocol
+- IP: Internet Protocol
+- ARP
+- RARP
+- CTO: Chief Technical Officer
+- CISO: Chief Information Security Officer
+- DMZ
+- IDS/IPS
+- WAF
+- Zero day
+- Vulnerability
+- Threat
+- Risk
+- 

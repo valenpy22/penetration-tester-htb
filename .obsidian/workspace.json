@@ -69,12 +69,26 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "4. Footprinting/16. IPMI - Writeup.md",
+                "file": "6. Vulnerability Assessment/Vulnerability Assessment.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "16. IPMI - Writeup"
+              "title": "Vulnerability Assessment"
+            }
+          },
+          {
+            "id": "5980a01a9f7887af",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "9. Using The Metasploit Framework/Using The Metasploit Framework.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Using The Metasploit Framework"
             }
           },
           {
@@ -92,7 +106,7 @@
             }
           }
         ],
-        "currentTab": 4
+        "currentTab": 5
       }
     ],
     "direction": "vertical"
@@ -254,42 +268,49 @@
       "bases:Create new base": false
     }
   },
-  "active": "d1b4f7ec43529a90",
+  "active": "5980a01a9f7887af",
   "lastOpenFiles": [
+    "9. Using The Metasploit Framework/Pasted image 20260626141129.png",
+    "9. Using The Metasploit Framework/Untitled.md",
+    "9. Using The Metasploit Framework/Using The Metasploit Framework.md",
+    "9. Using The Metasploit Framework/HTB Lab Writeup - FortiLogger Arbitrary File Upload + Hash Dumping.md",
+    "9. Using The Metasploit Framework/HTB Lab Writeup - elFinder + Baron Samedit Privilege Escalation.md",
+    "9. Using The Metasploit Framework/HTB Academy — Apache Druid RCE Writeup.md",
+    "Pasted image 20260626141213.png",
+    "6. Vulnerability Assessment/Vulnerability Assessment.md",
+    "9. Using The Metasploit Framework",
+    "6. Vulnerability Assessment/Pasted image 20260625203832.png",
+    "Screenshot from 2026-04-19 13-16-09.png",
+    "Pasted image 20260419122608.png",
+    "6. Vulnerability Assessment/Pasted image 20260625164129.png",
+    "Pasted image 20260419124013.png",
+    "Glossary.md",
+    "Untitled.md",
+    "4. Footprinting/21. Footprinting Lab - Hard.md",
+    "6. Vulnerability Assessment",
     "4. Footprinting/Footprinting.md",
-    "4. Footprinting/16. IPMI - Writeup.md",
-    "4. Footprinting/Pasted image 20260417100959.png",
+    "4. Footprinting/11. IMAP - POP3 Writeup.md",
+    "4. Footprinting/12. SNMP - Writeup.md",
+    "4. Footprinting/20. Footprinting Lab - Medium.md",
     "4. Footprinting/15. Oracle TNS.md",
     "4. Footprinting/14. MSSQL - Writeup.md",
-    "4. Footprinting/Summary.md",
-    "4. Footprinting/13. MySQL - Writeup.md",
-    "4. Footprinting/12. SNMP - Writeup.md",
-    "4. Footprinting/11. IMAP - POP3 Writeup.md",
-    "4. Footprinting/10. SMTP - Writeup.md",
+    "4. Footprinting/19. Footprinting Lab - Easy.md",
+    "4. Footprinting/16. IPMI - Writeup.md",
     "4. Footprinting/9. DNS Enumeration - Writeup.md",
-    "Screenshot from 2026-04-19 13-16-09.png",
-    "Pasted image 20260419124013.png",
+    "4. Footprinting/Summary.md",
+    "4. Footprinting/Pasted image 20260417100959.png",
+    "4. Footprinting/13. MySQL - Writeup.md",
+    "4. Footprinting/10. SMTP - Writeup.md",
     "Pasted image 20260419123738.png",
     "Pasted image 20260419123544.png",
-    "Pasted image 20260419122608.png",
-    "4. Footprinting/Pasted image 20260417114602.png",
     "Machines/Easy/5. TwoMillion.md",
     "Machines/Easy/1. Kobold.md",
     "Machines/Easy/3. CCTV.md",
     "2026-03-28.md",
-    "Machines/Easy/4. WingData.md",
-    "Machines/Easy/2. Cap.md",
     "Machines/Easy",
     "Machines",
-    "3. Network Enumeration With Nmap/Network Enumeration With Nmap.md",
     "4. Footprinting",
-    "Untitled.md",
-    "1. Penetration Testing Process/Penetration Testing Process.md",
     "3. Network Enumeration With Nmap",
-    "2. Getting Started/HTB — GettingStarted Writeup.md",
-    "2. Getting Started/Getting Started.md",
-    "2. Getting Started/Pasted image 20260205130352.png",
-    "2. Getting Started/Pasted image 20260205130300.png",
     "2. Getting Started",
     "1. Penetration Testing Process"
   ]

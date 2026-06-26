@@ -1308,13 +1308,13 @@ Nmap done: 1 IP address (1 host up) scanned in 0.48 seconds
 # IMAP / POP3
 These are protocols for retrieving emails from a mail server.
 
-|Feature|IMAP|POP3|
-|---|---|---|
-|Server-side management|Yes|No|
-|Folder structures|Yes|No|
-|Multi-client sync|Yes|No|
-|Actions available|Full management|List, retrieve, delete only|
-|Emails stored on server|Yes, until deleted|Downloaded and removed|
+| Feature                 | IMAP               | POP3                        |
+| ----------------------- | ------------------ | --------------------------- |
+| Server-side management  | Yes                | No                          |
+| Folder structures       | Yes                | No                          |
+| Multi-client sync       | Yes                | No                          |
+| Actions available       | Full management    | List, retrieve, delete only |
+| Emails stored on server | Yes, until deleted | Downloaded and removed      |
 
 **IMAP key traits:**
 - Port `143` (plain) or `993` (SSL/TLS encrypted)
@@ -2642,3 +2642,265 @@ Cracked ADMIN hash revealed a default password (`ADMIN`) — usable for BMC logi
 **The tradeoff:** that convenience exposes password hashes to anyone on the network → unauthorized access, system disruption, or RCE.
 **Takeaway:** IPMI enumeration should be standard in every internal pentest playbook.
 
+# Linux Remote Management
+## SSH (port 22)
+Encrypted protocol for remote access, file transfer, and port forwarding. Two versions: SSH-1 (vulnerable to MITM) and SSH-2 (current standard).
+
+**Authentication methods:** password, public-key, host-based, keyboard, challenge-response, GSSAPI.
+
+**Public key auth flow:**
+1. Server sends its public host key → client verifies identity
+2. Server encrypts a challenge with client's public key → client decrypts with private key → connection established
+
+**Dangerous misconfigurations**
+
+| Setting                      | Risk                                       |
+| ---------------------------- | ------------------------------------------ |
+| `PasswordAuthentication yes` | Enables brute-force                        |
+| `PermitEmptyPasswords yes`   | Trivial access                             |
+| `PermitRootLogin yes`        | Direct root exposure                       |
+| `Protocol 1`                 | Weak, MITM-vulnerable                      |
+| `X11Forwarding yes`          | Allows X11 forwarding for GUI applications |
+| `AllowTcpForwarding yes`     | Allows forwarding of TCP ports             |
+| `PermitTunnel`               | Allows tunneling                           |
+| `DebianBanner yes`           | Displays a specific banner when logging in |
+
+### Footprinting the Service
+
+```bash
+# Fingerprint the SSH server
+git clone https://github.com/jtesta/ssh-audit.git && cd ssh-audit
+./ssh-audit.py 10.129.14.132
+
+# Check available authentication methods
+ssh -v cry0l1t3@10.129.14.132
+
+# Force password authentication (useful for brute-force)
+ssh -v cry0l1t3@10.129.14.132 -o PreferredAuthentications=password
+```
+
+---
+
+## Rsync (port 873)
+Tool for efficient local/remote file sync using delta-transfer (only sends changed data). Common in backups. Can tunnel over SSH.
+
+### Footprinting the Service
+```bash
+# Detect service
+sudo nmap -sV -p 873 127.0.0.1
+
+# List available shares
+nc -nv 127.0.0.1 873
+
+# Enumerate share contents
+rsync -av --list-only rsync://127.0.0.1/dev
+
+# Download all files from share
+rsync -av rsync://127.0.0.1/dev
+
+# If running over SSH
+rsync -av -e ssh rsync://127.0.0.1/dev
+rsync -av -e "ssh -p2222" rsync://127.0.0.1/dev
+```
+
+**Key risk:** unauthenticated shares can expose sensitive files (SSH keys, configs, secrets). Always check for password reuse if credentials were found elsewhere.
+## R-Services (ports 512, 513, 514)
+
+Legacy Unix suite, replaced by SSH. Transmits data **unencrypted** — vulnerable to MITM. Still found on commercial systems (Solaris, HP-UX, AIX).
+
+**Main commands:**
+
+| Command  | Port | Description                |
+| -------- | ---- | -------------------------- |
+| `rcp`    | 514  | Remote file copy           |
+| `rsh`    | 514  | Remote shell without login |
+| `rexec`  | 512  | Remote command execution   |
+| `rlogin` | 513  | Remote login (Unix only)   |
+
+**Attack vector:** misconfigured `/etc/hosts.equiv` and `~/.rhosts` files allow authentication bypass. The `+` wildcard is especially dangerous — it trusts any host or user.
+
+```bash
+# Looking up at the file
+cat /etc/hosts.equiv
+# <hostname> <local username>
+pwnbox cry0l1t3
+
+# Scan R-Services ports
+sudo nmap -sV -p 512,513,514 10.0.17.2
+```
+
+> The `hosts.equiv` file is recognize as the global configuration regarding all users on a system, whereas `.rhosts` provides a per-user configuration.
+
+```bash
+# Sample .rhosts file
+cat .rhosts
+
+htb-student     10.0.17.5
++               10.0.17.10
++               +
+```
+
+```bash
+# Login without credentials if .rhosts is misconfigured
+rlogin 10.0.17.2 -l htb-student
+
+# List authenticated users on the network
+rwho
+root     web01:pts/0 Dec  2 21:34
+htb-student     workstn01:tty1  Dec  2 19:57  2:25
+```
+
+`htb-student` user is currently authenticated to the `workstn01` host, whereas the `root` user is authenticated to the `web01` host.
+
+```bash
+rusers -al 10.0.17.5
+htb-student     10.0.17.5:console          Dec 2 19:57     2:25
+```
+### Pentesting Takeaways
+- **SSH** → check `sshd_config` for misconfigs; attempt brute-force if `PasswordAuthentication yes` is set
+- **Rsync** → probe shares without auth; look for SSH keys or credential files
+- **R-Services** → inspect `.rhosts` and `hosts.equiv`; attempt `rlogin` without password; use `rwho`/`rusers` to map authenticated users on the network
+
+# Windows Remote Management Protocols
+## RDP – Remote Desktop Protocol (port 3389)
+
+GUI-based remote access protocol by Microsoft. Runs over TCP (and sometimes UDP) on port 3389. Supports TLS/SSL since Windows Vista, but many systems still accept weak encryption. Certificates are self-signed by default, meaning clients can't distinguish real from forged ones. NLA (Network Level Authentication) is the default restriction on modern Windows Server. If Network Address Translation (NAT) is used on the route between client and server, the remote computer needs the public IP address to reach the server. In addition, port forwarding must be set up on the NAT router in the direction of the server. 
+### Footprinting the Service
+
+```bash
+# Full RDP scan with all rdp scripts
+nmap -sV -sC 10.129.201.248 -p3389 --script rdp*
+
+Starting Nmap 7.92 ( https://nmap.org ) at 2021-11-06 15:45 CET
+Nmap scan report for 10.129.201.248
+Host is up (0.036s latency).
+
+PORT     STATE SERVICE       VERSION
+3389/tcp open  ms-wbt-server Microsoft Terminal Services
+| rdp-enum-encryption: 
+|   Security layer
+|     CredSSP (NLA): SUCCESS
+|     CredSSP with Early User Auth: SUCCESS
+|_    RDSTLS: SUCCESS
+| rdp-ntlm-info: 
+|   Target_Name: ILF-SQL-01
+|   NetBIOS_Domain_Name: ILF-SQL-01
+|   NetBIOS_Computer_Name: ILF-SQL-01
+|   DNS_Domain_Name: ILF-SQL-01
+|   DNS_Computer_Name: ILF-SQL-01
+|   Product_Version: 10.0.17763
+|_  System_Time: 2021-11-06T13:46:00+00:00
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 8.26 seconds
+```
+
+**Output analysis:**
+
+- `CredSSP (NLA): SUCCESS` → NLA is enabled; credentials required before session
+- `Product_Version: 10.0.17763` → Windows Server 2019 (build fingerprinting)
+- `NetBIOS_Computer_Name: ILF-SQL-01` → hostname leaked without authentication
+
+```bash
+# Packet trace — useful but note: mstshash=nmap cookie is detectable by EDR/threat hunters
+nmap -sV -sC 10.129.201.248 -p3389 --packet-trace --disable-arp-ping -n
+```
+
+**Note:** The `mstshash=nmap` cookie in packets can trigger alerts on hardened networks — consider this during real engagements.
+
+```bash
+# Installation of RDP Security Check
+sudo cpan
+Loading internal logger. Log::Log4perl recommended for better logging
+
+CPAN.pm requires configuration, but most of it can be done automatically.
+If you answer 'no' below, you will enter an interactive dialog for each
+configuration option instead.
+
+Would you like to configure as much as possible automatically? [yes] yes
+
+
+Autoconfiguration complete.
+
+commit: wrote '/root/.cpan/CPAN/MyConfig.pm'
+
+You can re-run configuration any time with 'o conf init' in the CPAN shell
+
+cpan shell -- CPAN exploration and modules installation (v2.27)
+Enter 'h' for help.
+
+
+cpan[1]> install Encoding::BER
+
+Fetching with LWP:
+http://www.cpan.org/authors/01mailrc.txt.gz
+Reading '/root/.cpan/sources/authors/01mailrc.txt.gz'
+............................................................................DONE
+...SNIP...
+```
+
+```bash
+# Check supported security protocols and encryption methods (no auth needed)
+git clone https://github.com/CiscoCXSecurity/rdp-sec-check.git && cd rdp-sec-check
+./rdp-sec-check.pl 10.129.201.248
+```
+
+**Output analysis:**
+
+- `PROTOCOL_HYBRID: TRUE` → only NLA/CredSSP supported
+- `PROTOCOL_RDP: FALSE` and `PROTOCOL_SSL: FALSE` → legacy protocols disabled (good hardening)
+- All `ENCRYPTION_METHOD_*: FALSE` → no weak encryption accepted
+
+```bash
+# Connect to RDP from Linux
+xfreerdp /u:cry0l1t3 /p:"P455w0rd!" /v:10.129.201.248
+```
+
+**Output analysis:**
+
+- `self signed certificate (18)` → certificate is self-signed, cannot be verified — expected in most internal environments
+- `CERTIFICATE NAME MISMATCH` → connecting by IP but cert is issued to hostname `ILF-SQL-01`; not necessarily malicious, just poor cert management
+## WinRM – Windows Remote Management (ports 5985/5986, TCP ports)
+
+Command-line remote management using SOAP over HTTP/HTTPS. Must be explicitly enabled on Windows 10 and older servers. Port 5985 = HTTP, 5986 = HTTPS. Enabled by default on Windows Server 2012+. Allows PowerShell remoting and remote command execution via WinRS.
+
+Windows Remote Shell (WinRS) is a component which lets us execute arbitrary commands on the remote system. 
+### Footprinting the Service
+```bash
+# Detect WinRM service
+nmap -sV -sC 10.129.201.248 -p5985,5986 --disable-arp-ping -n
+```
+
+- `5985/tcp open http Microsoft HTTPAPI httpd 2.0` → WinRM is active over HTTP (unencrypted)
+- Port 5986 not shown → HTTPS not configured; traffic is cleartext
+
+```bash
+# Connect and get a shell (Linux attack host)
+evil-winrm -i 10.129.201.248 -u Cry0l1t3 -p P455w0rD!
+```
+
+**Output analysis:**
+
+- `*Evil-WinRM* PS C:\Users\Cry0l1t3\Documents>` → successful shell as user `Cry0l1t3`
+- Working directory is the user's Documents folder — useful starting point for enumeration
+## WMI – Windows Management Instrumentation (port 135 → random)
+
+Microsoft's implementation of CIM/WBEM. Provides near-complete read/write access to Windows system settings — the most powerful admin interface on Windows. Starts on TCP 135, then moves to a random high port. Accessible via PowerShell, VBScript, or WMIC.
+### Footprinting the Service
+```bash
+# Execute a remote command via WMI using Impacket
+/usr/share/doc/python3-impacket/examples/wmiexec.py Cry0l1t3:"P455w0rD!"@10.129.201.248 "hostname"
+```
+
+**Output analysis:**
+
+- `SMBv3.0 dialect used` → WMI over SMB transport negotiated
+- `ILF-SQL-01` → command executed successfully and returned hostname — confirms RCE as that user
+### Pentesting Takeaways
+
+| Protocol  | Key Attack Surface                                                                                              |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| **RDP**   | Brute-force if NLA disabled; self-signed cert warning is normal; check for weak encryption with `rdp-sec-check` |
+| **WinRM** | If open, use `evil-winrm` with found credentials; HTTP (5985) means cleartext traffic                           |
+| **WMI**   | Use `wmiexec.py` for stealthy command execution; requires valid credentials                                     |
