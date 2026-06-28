@@ -268,8 +268,9 @@
       "bases:Create new base": false
     }
   },
-  "active": "5980a01a9f7887af",
+  "active": "d904062081e56965",
   "lastOpenFiles": [
+    "7. File Transfers",
     "9. Using The Metasploit Framework/Using The Metasploit Framework.md",
     "15. Attacking Web Applications with Ffuf/Attacking Web Applications with Ffuf.md",
     "15. Attacking Web Applications with Ffuf",
@@ -308,7 +309,6 @@
     "Machines/Easy/5. TwoMillion.md",
     "Machines/Easy/1. Kobold.md",
     "Machines/Easy/3. CCTV.md",
-    "2026-03-28.md",
     "Machines/Easy",
     "Machines",
     "4. Footprinting",
