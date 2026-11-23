@@ -1,0 +1,19 @@
+# Carpetas de trabajo del curso de ML (nombre UUID): venvs, datasets y pesos.
+# No forman parte del vault y superan el límite de 100 MB de GitHub.
+Course/1d3acb71-d357-4d43-aa74-87252e39eb6b/
+Course/59bfb04b-5921-4fcd-b8fe-6fdd8d45f107/
+Course/603de7b3-e5f0-4c7b-96bd-737031aaba20-1779783353/
+Course/bb2b4aee-ab46-43a8-874a-3c90037424be/
+Course/c679b991-937b-4d6f-baa2-84d92befdb9f/
+
+# Entornos y caches de Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Datasets y pesos de modelos
+*.mat
+*.pth
+*-ubyte
+*-ubyte.gz
